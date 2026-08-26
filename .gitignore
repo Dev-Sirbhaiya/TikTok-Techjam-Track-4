@@ -19,3 +19,6 @@ wiki/reviews/*.raw.txt
 Thumbs.db
 .vscode/
 .idea/
+
+# Claude Code harness state (not project content)
+.claude/
