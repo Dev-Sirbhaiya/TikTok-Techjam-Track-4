@@ -89,6 +89,19 @@ Anchored on the final purchased record per session:
 3. Demo video on YouTube (public) linked from Devpost — walkthrough/API-usage video is acceptable
    since there's no UI.
 
+## TechnicalScore formula (verified against `evaluator/local_evaluator.py`, not just the README)
+
+```
+Efficiency     = clip((11 - MTTC) / 10, 0, 1)
+TechnicalScore = 0.50 * HitRate@10 + 0.30 * MRR + 0.20 * Efficiency
+```
+
+Coverage (retrieval) is weighted highest at 50%, precision (ranking) 30%, efficiency (turns) 20%.
+Weak BM25 starter baseline: TechnicalScore ≈ 0.10671 (see `wiki/08_evaluation_log.md`). Given these
+weights, retrieval recall is the single highest-leverage lever, then ranking precision, then
+turn-efficiency — this should guide build-order priority (research agent 8's conclusion,
+independently confirmed against the actual evaluator source, not just its docs).
+
 ## Judging weights
 Technical Execution 35% · Innovation & Problem Insight 20% · Impact & Relevance 20% ·
 Feasibility & Practicality 15% · Presentation & Communication 10% (final event only).

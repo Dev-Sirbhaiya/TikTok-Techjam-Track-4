@@ -60,3 +60,40 @@ also get logged here (with a link to the full report under `reviews/`).
   `requirements-freeze.txt` are all in place and untracked (per `.gitignore`) except the two
   requirements files at repo root, ready for the coordinating session to review/commit. Solution
   architecture work can now start from an inspected, verified, runnable baseline.
+
+## 2026-08-26 — Deep research phase: 9 parallel agents + ground-truth verification
+
+- User asked for deep parallel research across the problem statement's technical dimensions before
+  any ideation/implementation, plus thorough codebase/dataset understanding. Launched 9 parallel
+  research agents (general-purpose, web/arXiv/GitHub access) into `research/01-09_*.md`, each
+  ending in topic-scoped Dos/Don'ts: intent routing, hybrid in-memory retrieval, LLM reranking,
+  dialogue state tracking, clarification generation, context distillation/personalization, adaptive
+  orchestration, evaluation-metric literature, and prior art + starter-kit online inspection.
+  All 9 completed successfully with no blockers; full citation trails in each file.
+- In parallel, personally read the actual cloned participant repo's evaluator source
+  (`evaluator/local_evaluator.py`), starter agent (`starter/agent.py`), competition spec,
+  submission rules, and evaluation config — this is ground truth, not inference, and is now
+  captured in `wiki/09_simulator_mechanics.md` (new page). Key findings: category is disclosed in
+  100% of session openers regardless of scenario; the simulated customer only reveals constraints
+  when `ask_attribute` matches its exact `classify_constraint()` keyword taxonomy; a hit before an
+  Intent Override's scripted turn never counts; budget/brand are structurally weak clarification
+  channels (rarely survive the intent-card's candidate-slicing); local dev evaluation hardcodes
+  `from starter.agent import Agent` with no override flag, while the final submission format is a
+  different standalone layout — both need to stay in sync via a shared implementation module.
+  Independently, research agent 9's own WebFetch-based inspection of the same repo converged on
+  the same facts (good cross-validation of the research methodology).
+- Directly confirmed the TechnicalScore formula against source (`evaluator/local_evaluator.py`
+  lines 279-280), not just the README, resolving research agent 8's flagged uncertainty:
+  `TechnicalScore = 0.50×HitRate@10 + 0.30×MRR + 0.20×Efficiency`,
+  `Efficiency = clip((11-MTTC)/10, 0, 1)`. HitRate@10 has the largest weight and gates MRR
+  mathematically (MRR ≤ HitRate@10), making retrieval coverage the highest-ROI first investment.
+  Logged onto `wiki/00_problem_statement.md`.
+- Synthesized all 9 research files plus the ground-truth mechanics into
+  `research/DOS_AND_DONTS.md` — a single master Dos/Don'ts organized by pillar, deduplicated,
+  distinguishing `[GROUND TRUTH]` (verified against actual code) from `[RESEARCH]` (literature-
+  derived judgment). No architecture decisions made yet — per the user's explicit instruction,
+  this phase was research-only; next step is ideation with the user before anything gets written
+  into `wiki/01_architecture.md`.
+- Note: `codex exec review` remains blocked (auth token revoked, see `status.md` Blockers) — this
+  research phase's commit has not been through a codex review; will be included in the backlog
+  once `codex login` is run.

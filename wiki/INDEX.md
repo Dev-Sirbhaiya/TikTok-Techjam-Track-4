@@ -20,6 +20,8 @@ lives here. Nothing important should exist only in a chat transcript.
 | 06 | [Future / Risky Ideas](06_future_ideas.md) | Ideation backlog — speculative or risky ideas not yet approved for the main line |
 | 07 | [External Resources & Datasets](07_external_resources.md) | What's imported from GitHub/HF, exact versions/commits/checksums, where it lives locally |
 | 08 | [Evaluation Log](08_evaluation_log.md) | Hit Rate@K / MRR / MTTC results per iteration, tracked over time |
+| 09 | [Simulator Mechanics](09_simulator_mechanics.md) | Ground-truth session/customer-simulator behavior, read directly from the organizer's evaluator code |
+| — | [Research](../research/) | Deep-research findings per technical dimension, plus master Dos & Don'ts — pre-architecture exploration |
 | — | [Codex Review Reports](reviews/) | One file per phase review, named `<phase-slug>-<date>.md` |
 
 ## Non-negotiable rules for this wiki

@@ -4,34 +4,37 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-26 (project scaffolding phase)
+Last updated: 2026-08-26 (deep research phase complete)
 
 ## Current phase
 
-**Deep research phase** (pre-build — challenge window opens 2026-08-29 12:00). Ten agents running
-in parallel right now: 1 importing the participant kit + dataset + venv (`external/`, `data/`,
-`.venv/`), 9 researching the technical dimensions of the four problem-statement pillars into
-`research/*.md` (see `research/README.md` for the live index). Explicitly research-only — nothing
-gets implemented until research + synthesis is done and reviewed with the user (ideation is next,
-per user instruction).
+**Deep research phase — complete.** All 9 parallel research agents finished (intent routing,
+hybrid retrieval, LLM reranking, dialogue state tracking, clarification generation, context
+distillation/personalization, adaptive orchestration, evaluation benchmarks, prior art + starter
+kit), synthesized into `research/DOS_AND_DONTS.md`, and cross-verified against the actual cloned
+participant repo source (not just web-fetched docs) — ground truth captured in
+`wiki/09_simulator_mechanics.md`. Pre-build — challenge window opens 2026-08-29 12:00.
 
 ## Next workstream
 
-**Once all 9 research agents + the import agent finish: synthesize, then ideate with the user
-before writing any code.**
+**Ideate with the user on Pillars I-III architecture, informed by `research/DOS_AND_DONTS.md` and
+`wiki/09_simulator_mechanics.md` — no code yet, per explicit user instruction to research first.**
 
-Import workstream is **done** (checksum verified, baseline recorded — see Recent Activity). Left:
-1. Once all 9 research agents finish: read `research/01_*.md` through `research/09_*.md`. Write
-   `research/DOS_AND_DONTS.md` — a single master list merging every file's Dos/Don'ts section,
-   deduplicated, organized by pillar, cross-checked against the hard constraints in
-   `wiki/00_problem_statement.md`.
-2. Cross-reference research agent 9's starter-kit findings (gathered via web inspection) against
-   the actual cloned repo at `external/techjam-conversational-search/` (now available locally) to
-   confirm the Agent interface / API contract / evaluator understanding is accurate — correct
-   agent 9's file if it inferred something the real code contradicts.
-3. Bring the synthesized findings + Dos/Don'ts back to the user for ideation on Pillars I-III
-   before any architecture gets written into `wiki/01_architecture.md` — user explicitly asked to
-   ideate together after research, not before.
+Concretely, once the user is ready to ideate:
+1. Walk through the build-order priority from `research/DOS_AND_DONTS.md` §0: retrieval coverage
+   first (highest TechnicalScore weight, gates MRR mathematically), then ranking precision, then
+   turn-efficiency as a gate not a goal.
+2. Decide concretely, per pillar, from the ranked options each research file lays out — e.g.
+   Pillar I: gazetteer+embedding hybrid intent router vs. single LLM-call router; BM25+dense+RRF
+   retrieval stack and specific embedding model choice; cross-encoder-guaranteed reranker with
+   optional LLM booster. Each decision becomes a `wiki/02_design_decisions.md` entry and gets
+   reflected in `wiki/01_architecture.md`.
+3. Resolve the one flagged ambiguity that needs a call either way before Pillar III design locks
+   in: "long-term user profile" interpretation (research/06 recommends within-session slow-decay
+   layer, not cross-session store — see that file's dedicated section).
+4. Once Pillars I-III have a decided shape, plan implementation phases (each phase = commit +
+   background codex review + wiki update per `CLAUDE.md` §3) and update this section with the
+   first concrete implementation workstream.
 
 ## Blockers
 
@@ -58,12 +61,26 @@ Import workstream is **done** (checksum verified, baseline recorded — see Rece
   evaluator: **Hit Rate@10 0.125, MRR 0.068034, MTTC 9.81, TechnicalScore 0.10671** — this is now
   our regression floor (`wiki/08_evaluation_log.md`). Full detail in
   `wiki/07_external_resources.md` (checklist fully checked off).
-- 2026-08-26 — Launched 9 parallel deep-research agents into `research/0X_*.md` covering all four
-  problem-statement pillars plus evaluation methodology and prior art — still running, see
-  `research/README.md`.
+- 2026-08-26 — **Deep research phase completed, all 9 agents, no blockers.** `research/0X_*.md`
+  covers all four problem-statement pillars plus evaluation methodology and prior art, each with
+  citations and topic-scoped Dos/Don'ts. Synthesized into `research/DOS_AND_DONTS.md`. In parallel,
+  personally verified the actual evaluator/starter-agent source code (not just docs) and captured
+  ground-truth session/scoring mechanics in new page `wiki/09_simulator_mechanics.md` — confirmed
+  the TechnicalScore formula directly from source, confirmed category is disclosed turn-1 in every
+  scenario, confirmed the exact clarification-reveal heuristic, confirmed local dev requires
+  editing `starter/agent.py` in place (hardcoded import, no override flag).
 
 ## Open questions / decisions needed from the user
 
-- None blocking right now. Architecture choices for Pillars I–III (retrieval weighting, ranking
-  approach, LLM choice if any) will surface real decisions once the starter kit is inspected —
-  those will be raised explicitly, not assumed.
+- **Ready for ideation now.** Architecture choices for Pillars I–III are laid out with ranked
+  options in `research/DOS_AND_DONTS.md` — none are decided yet, all await the ideation session.
+- Whether an external LLM API will actually be used (org provides no credits/keys) — affects
+  whether the reranker/orchestrator design should assume an LLM is available or build the
+  no-paid-API cross-encoder path as primary (research leans toward the latter regardless).
+- Confirm the "long-term user profile" interpretation (research/06's recommended reading: a
+  within-session, slow-decaying layer, not cross-session persistence) before Pillar III design
+  locks in — flagged as a genuine ambiguity in the problem statement, not resolvable from the docs
+  alone.
+- `codex login` still needed to unblock the codex-review half of the work-phase loop (see
+  Blockers) — not urgent for research/ideation, but should happen before the first implementation
+  phase so review coverage doesn't have a growing backlog.
