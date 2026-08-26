@@ -8,31 +8,42 @@ Last updated: 2026-08-26 (project scaffolding phase)
 
 ## Current phase
 
-**Project scaffolding & governance setup** (pre-build — challenge window opens 2026-08-29 12:00).
-Living wiki, `CLAUDE.md` enforcement rules, git repo, and external resource import are being set up
-so build time starting 08-29 goes straight into implementation.
+**Deep research phase** (pre-build — challenge window opens 2026-08-29 12:00). Ten agents running
+in parallel right now: 1 importing the participant kit + dataset + venv (`external/`, `data/`,
+`.venv/`), 9 researching the technical dimensions of the four problem-statement pillars into
+`research/*.md` (see `research/README.md` for the live index). Explicitly research-only — nothing
+gets implemented until research + synthesis is done and reviewed with the user (ideation is next,
+per user instruction).
 
 ## Next workstream
 
-**Verify the imported participant kit, then start Pillar I (Intent Routing & Hybrid Retrieval
-Pipeline).**
+**Once all 9 research agents + the import agent finish: synthesize, then ideate with the user
+before writing any code.**
 
-Concretely, once the background import agent reports back:
-1. Confirm `wiki/07_external_resources.md`'s verification checklist is fully checked off
-   (catalog checksum verified, starter BM25 agent runs against the local evaluator, venv installs
-   cleanly).
-2. Read the participant kit's Agent interface / API contract and the starter BM25 agent's code —
-   log what's reusable vs. what needs replacing in `wiki/03_design_log.md`.
-3. Run the unmodified starter agent through the local evaluator once, record the baseline in
-   `wiki/08_evaluation_log.md` (this is the regression floor everything else is measured against).
-4. Begin designing the intent router (Buying vs. Browsing dual-track split) — log the design in
-   `wiki/01_architecture.md` and the key decision in `wiki/02_design_decisions.md` before writing
-   code.
+Import workstream is **done** (checksum verified, baseline recorded — see Recent Activity). Left:
+1. Once all 9 research agents finish: read `research/01_*.md` through `research/09_*.md`. Write
+   `research/DOS_AND_DONTS.md` — a single master list merging every file's Dos/Don'ts section,
+   deduplicated, organized by pillar, cross-checked against the hard constraints in
+   `wiki/00_problem_statement.md`.
+2. Cross-reference research agent 9's starter-kit findings (gathered via web inspection) against
+   the actual cloned repo at `external/techjam-conversational-search/` (now available locally) to
+   confirm the Agent interface / API contract / evaluator understanding is accurate — correct
+   agent 9's file if it inferred something the real code contradicts.
+3. Bring the synthesized findings + Dos/Don'ts back to the user for ideation on Pillars I-III
+   before any architecture gets written into `wiki/01_architecture.md` — user explicitly asked to
+   ideate together after research, not before.
 
 ## Blockers
 
-- None yet. If the background import agent reports `codex` unavailable, a clone/download failure,
-  or a checksum mismatch, it goes here with enough detail to unblock in one read.
+- **`codex` CLI is installed but not authenticated** — `codex exec review --commit e5560788...`
+  failed with `401 Unauthorized: refresh_token_invalidated` (session expired/revoked). The
+  CLAUDE.md work-phase review step cannot run until this is fixed.
+  **Action needed from the user**: run `! codex login` to re-authenticate, then re-run the review
+  with `codex exec review --commit e5560788b47cbd8c4afb27584d55f87adbd28a61 --title "Project
+  scaffolding: living wiki + CLAUDE.md governance"` to get the deferred first review. Until then,
+  future phases should still commit + update the wiki on schedule; codex review kicks off as soon
+  as it's usable again, and any backlog gets reviewed against `--base` ranges spanning the skipped
+  phases rather than being skipped entirely.
 
 ## Recent activity
 
@@ -40,9 +51,16 @@ Concretely, once the background import agent reports back:
   constraints, and evaluation metrics (`wiki/00_problem_statement.md`).
 - 2026-08-26 — Initialized git repo, built living wiki (`wiki/`), wrote `CLAUDE.md` enforcement
   rules for the commit + codex-review + wiki-update work-phase loop.
-- 2026-08-26 — Launched background agent to clone the participant repo, download/verify the
-  participant kit release, and set up the Python venv — see `wiki/07_external_resources.md` for
-  outcome once it reports back.
+- 2026-08-26 — **External resource import completed successfully, no blockers.** Participant repo
+  cloned (`external/techjam-conversational-search/` @ `9a35be5`), participant kit downloaded and
+  **SHA256-verified** (`data/participant-kit/`), venv set up at `.venv/` (confirmed stdlib-only —
+  no dependencies to install), and the unmodified starter BM25 agent run through the local
+  evaluator: **Hit Rate@10 0.125, MRR 0.068034, MTTC 9.81, TechnicalScore 0.10671** — this is now
+  our regression floor (`wiki/08_evaluation_log.md`). Full detail in
+  `wiki/07_external_resources.md` (checklist fully checked off).
+- 2026-08-26 — Launched 9 parallel deep-research agents into `research/0X_*.md` covering all four
+  problem-statement pillars plus evaluation methodology and prior art — still running, see
+  `research/README.md`.
 
 ## Open questions / decisions needed from the user
 
