@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Cloned external repos and raw datasets (tracked by reference in wiki, not by content)
+external/*
+!external/.gitkeep
+data/*
+!data/.gitkeep
+!data/MANIFEST.md
+
+# Codex review raw output (large, ephemeral) - keep only curated summaries
+wiki/reviews/*.raw.txt
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
