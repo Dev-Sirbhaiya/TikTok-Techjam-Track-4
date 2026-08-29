@@ -29,8 +29,8 @@ things stand.
 | Pillar III — Context distillation & adaptive orchestration | main session | done (Phase 0), Phase 1.4 pending | 2026-08-29 | 2026-08-29 | preference vectors done; named adaptive state machine deferred to Phase 1.4 |
 | Pillar IV — Evaluator integration & metrics tracking | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | `tools/run_eval.py` is the standing "one command to run" |
 | **Phase 1 implementation + closeout** (calibration split, ratio-gated facet selection, named orchestrator, 1 codex review fully triaged) | main session | **done** | 2026-08-29 | 2026-08-29 | TechnicalScore 0.4087 (+24.5% vs Phase 0) — see `wiki/08_evaluation_log.md`; buying-track regression from Phase 0 fully recovered |
-| Phase 2 — gated ablations (multi-interest, bandit, VoI) | main session | next up | — | — | per user's continue-iterating directive |
-| Phase 3 — offline tuning + comparative feedback | unassigned | not started | — | — | per user's continue-iterating directive |
+| **Phase 2 implementation + closeout** (3 gated ablations, all honestly tested: 1 kept, 2 cut; codex review's 3 findings fixed + bandit ablation re-run post-fix) | main session | **done** | 2026-08-30 | 2026-08-30 | TechnicalScore 0.4111 (+0.6% vs Phase 1) — see `wiki/08_evaluation_log.md` |
+| Phase 3 — offline tuning + comparative feedback | main session | in progress | 2026-08-30 | — | per user's continue-iterating directive |
 | Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | scheduled as Phase 5, `implementation/05_BUILD_PLAN.md` |
 
 ## Status legend

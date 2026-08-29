@@ -203,6 +203,10 @@ def test_adjusted_clarify_threshold_lowers_bar_on_disagreement():
 def test_multi_interest_k1_fallback_matches_single_ema():
     import copilot.phase2.multi_interest as mi
     import numpy as np
+    original = mi.ENABLE_MULTI_INTEREST  # CORRECTED per Phase 2 codex review (finding 3): restore
+    # the actual original value, not a hardcoded True -- the production default is now False
+    # post-ablation, so hardcoding True here was leaking a flipped flag into every test that ran
+    # after this one, making the suite order-dependent.
     mi.ENABLE_MULTI_INTEREST = False
     try:
         state = mi.MultiInterestState()
@@ -212,18 +216,27 @@ def test_multi_interest_k1_fallback_matches_single_ema():
         state.update(v2)
         assert len(state.vectors) == 1  # K=1 disabled -> never spawns a second hypothesis
     finally:
-        mi.ENABLE_MULTI_INTEREST = True
+        mi.ENABLE_MULTI_INTEREST = original
 
 
 def test_multi_interest_spawns_second_hypothesis_on_divergence():
     import copilot.phase2.multi_interest as mi
     import numpy as np
-    state = mi.MultiInterestState()
-    v1 = np.array([1.0, 0.0, 0.0])
-    v2 = np.array([0.0, 1.0, 0.0])  # orthogonal -- similarity 0, well below SPAWN_THRESHOLD
-    state.update(v1)
-    state.update(v2)
-    assert len(state.vectors) == 2
+    # Disabled by default post-ablation (see the module's own comment) -- force-enable to test the
+    # underlying spawn mechanism itself, independent of the ablation's on/off decision. This test
+    # was previously passing only by riding on a flag leak from the preceding test (codex review
+    # finding 3); now that that leak is fixed, it must set its own precondition explicitly.
+    original = mi.ENABLE_MULTI_INTEREST
+    mi.ENABLE_MULTI_INTEREST = True
+    try:
+        state = mi.MultiInterestState()
+        v1 = np.array([1.0, 0.0, 0.0])
+        v2 = np.array([0.0, 1.0, 0.0])  # orthogonal -- similarity 0, well below SPAWN_THRESHOLD
+        state.update(v1)
+        state.update(v2)
+        assert len(state.vectors) == 2
+    finally:
+        mi.ENABLE_MULTI_INTEREST = original
 
 
 def test_action_policy_warm_start_prior_not_cold():

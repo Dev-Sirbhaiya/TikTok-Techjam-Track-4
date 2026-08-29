@@ -218,6 +218,77 @@ also get logged here (with a link to the full report under `reviews/`).
 - Phase 1 exit criteria (`05_BUILD_PLAN.md`): no regressions vs. Phase 0 — met and substantially
   exceeded. Proceeding directly to Phase 2 per the user's standing `/goal`.
 
+## 2026-08-30 — Phase 2 CLOSED OUT: one kept, two honestly cut, +0.6% net
+
+- Implemented and ablated all three Phase 2 items on the 40-session validation split (fast
+  iteration; full-200 confirmatory run reserved for the final locked configuration):
+  - **2.3/2.5 retriever-disagreement VoI signal** (`phase2/voi.py`, using
+    `retrieval.retriever_disagreement` — a live-computable BM25/dense overlap measure, never the
+    ground-truth target rank per D6/D7): modest, consistent win (TechnicalScore/MRR/MTTC all favor
+    it, HitRate@10 tied). **KEPT.**
+  - **2.1 multi-interest hypothesis vectors** (`phase2/multi_interest.py`, K=2 vs K=1): K=1 won on
+    every single metric. **CUT**, exactly matching D3's a priori risk assessment that multi-interest
+    can hurt when sessions aren't genuinely multi-faceted (true here — each session has one hidden
+    target, not multiple competing interests to disambiguate).
+  - **2.2 contextual bandit action policy** (`phase2/action_policy.py`, warm-started from a
+    ground-truth-derived prior, not cold): OFF won on every single metric. **CUT**, matching D11's
+    a priori cold-start-risk assessment (only ~3-6 real clarification decisions per session — not
+    enough signal for within-session adaptation to help, and the warm-start prior alone wasn't
+    enough to compensate).
+  - Both cut modules are kept in the tree, disabled by their own flags, as a genuine "tried,
+    measured, cut" record — explicitly sanctioned as valuable Technical Execution material by
+    `implementation/08_ABLATION_MATRIX.md`, not something to hide.
+- **Codex review** (`wiki/reviews/phase2-2.1-2.3-2026-08-30.raw.txt`) — 3 findings, all fixed, none
+  declined (commit reviewed: `9a9659e`). Codex's own summary: "the gated bandit path records a
+  capped, usually invariant pool size and can replay stale rewards, so its behavior and ablation
+  conclusion are unreliable. The new multi-interest tests are also order-dependent and one fails
+  when executed alone."
+  1. **[P2] Bandit reward measured an already-capped pool** (`agent.py:133`/`:114`, pre-fix):
+     `decide_rerank_depth()` caps `ranked` at exactly 50 whenever the pool exceeds 20, and the
+     bandit's reward comparison used `len(ranked)` on both sides — so `pool_size_at_ask` and the
+     next turn's comparison pool were both saturated at 50 far more often than not, reporting a
+     false zero-reduction reward regardless of how much the clarification actually narrowed the
+     real candidate set. **Fixed**: both sides now use `len(candidates)`, the pre-rerank-cap,
+     post-filter pool computed earlier in the same turn.
+  2. **[P2] Stale bandit outcome replayed across turns** (`agent.py:113-114`, pre-fix):
+     `pool_size_at_ask` was never cleared after being consumed, so an ask followed by one or more
+     non-ask turns kept re-recording the same stale outcome against each subsequent turn's
+     unrelated pool until the next ask overwrote it — repeatedly biasing the learned utility
+     estimate on every session with a multi-turn gap after a clarification. **Fixed**: `agent.py`
+     now sets `state.pool_size_at_ask = None` immediately after `record_outcome()` runs, so each
+     ask contributes exactly one reward.
+  3. **[P2] Test flag leak made the multi-interest suite order-dependent**
+     (`tests/test_smoke.py:214-215`, pre-fix): `test_multi_interest_k1_fallback_matches_single_ema`
+     restored `ENABLE_MULTI_INTEREST` to a hardcoded `True` in its `finally` block instead of the
+     actual original value (`False`, the real post-ablation production default) — leaking a flipped
+     flag into every test that ran after it in file order. Fixing the leak exposed a second, latent
+     bug in the very next test (`test_multi_interest_spawns_second_hypothesis_on_divergence`), which
+     had been passing only by silently riding on that leak and failed immediately once it was
+     removed. **Both fixed**: the first test now saves/restores the real original value; the second
+     now explicitly sets `ENABLE_MULTI_INTEREST = True` itself (with its own save/restore) as its
+     own precondition, matching the existing correct pattern already used by the action-policy test
+     two functions below. Verified order-independent afterward (`pytest -k multi_interest` run
+     standalone, and the full 34-test suite, both green).
+  - **Re-ablation, not just a fix**: since findings 1-2 meant the Phase 2.2 bandit's reported
+    "OFF beats ON" conclusion was reached with a demonstrably broken reward signal, re-ran the
+    40-session validation-split ablation with `ENABLE_ACTION_POLICY` forced back to `True` on top of
+    the fixed reward tracking, rather than assuming the original verdict still held. Result: ON got
+    **worse**, not better, once measured honestly — TechnicalScore 0.359467/HitRate@10 0.425/MRR
+    0.261558/MTTC 7.575, vs. the already-cut OFF number of 0.402/0.475/0.297/7.225, and vs. the
+    original *buggy*-measurement ON number of 0.3693/0.425/0.291. The cut verdict was not an
+    artifact of the measurement bug — it holds, more decisively, once the bug is fixed. Flag
+    reverted to `False` (unchanged shipped configuration); since `ENABLE_ACTION_POLICY=False` makes
+    `record_outcome()`/`utility_multiplier()` no-ops regardless of what's stored in
+    `pool_size_at_ask`, the fix is provably behavior-neutral in the actual shipped config, so no
+    full-200-session re-run was needed to confirm no regression there.
+- **Full Phase 2 exit result (200 sessions, locked config): TechnicalScore 0.411066** — up from
+  Phase 1's 0.408714 (+0.6%, a modest net gain, consistent with the single kept feature itself
+  being a modest win). Three of four scenarios improved (boundary, browsing, buying); intent_override
+  dropped (0.433→0.367) — flagged honestly, not chased further given n=30's noise floor (±3.3pp per
+  session) and the clear net-positive elsewhere; a candidate for a future calibration look, not a
+  blocker. Unaffected by the codex-review fixes above (bandit stays disabled in the shipped config).
+- Proceeding to Phase 3 per the user's standing `/goal`.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside

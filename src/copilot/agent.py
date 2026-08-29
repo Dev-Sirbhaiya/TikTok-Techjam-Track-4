@@ -110,8 +110,19 @@ class Agent:
 
         # Phase 2.2: close the bandit's reward loop from whatever was asked last turn -- the LIVE
         # reward is pool-size reduction only (never the target rank; see D6/D7).
+        # CORRECTED per Phase 2 codex review (finding 1): use the pre-rerank-cap pool (`candidates`,
+        # post-filter but before `[:rerank_depth]`/`ranked`'s hard cap at 50) on both sides of the
+        # comparison. `len(ranked)` saturates at `rerank_depth` (50 whenever the pool exceeds 20 --
+        # see orchestrator.decide_rerank_depth), so it was usually pool-size-invariant regardless of
+        # how much the clarification actually narrowed the candidate set, producing false-zero
+        # rewards and an unreliable ablation signal.
+        # CORRECTED per Phase 2 codex review (finding 2): consume the pending ask exactly once by
+        # clearing `pool_size_at_ask` immediately after recording -- previously it was never reset,
+        # so an ask followed by one or more non-ask turns kept replaying the same stale outcome
+        # against each subsequent turn's unrelated pool until the next ask overwrote it.
         if state.last_asked_attribute and state.pool_size_at_ask is not None:
-            record_outcome(state, state.last_asked_attribute, state.pool_size_at_ask, len(ranked))
+            record_outcome(state, state.last_asked_attribute, state.pool_size_at_ask, len(candidates))
+            state.pool_size_at_ask = None
 
         # Phase 2.3/2.5: retriever-disagreement-adjusted clarify threshold -- gated behind
         # phase2.voi.USE_DISAGREEMENT_SIGNAL, ablated before being trusted by default.
@@ -130,7 +141,10 @@ class Agent:
                 response["ask_attribute"] = attr
                 response["message"] = phrase_question(attr, ranked)
                 state.last_asked_attribute = attr
-                state.pool_size_at_ask = len(ranked)  # Phase 2.2: snapshot for next turn's reward
+                # CORRECTED per Phase 2 codex review (finding 1): snapshot the pre-rerank-cap pool
+                # (`candidates`), not `ranked` (capped at rerank_depth, usually 50) -- see the
+                # matching comment at the reward-closing site above.
+                state.pool_size_at_ask = len(candidates)
             else:
                 action = "commit"  # nothing productive left to ask -- fall through to commit phrasing
 
