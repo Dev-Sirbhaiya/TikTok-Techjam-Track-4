@@ -231,11 +231,13 @@ def test_price_bucket_reduces_cardinality():
 def test_select_best_question_skips_near_unique_facets():
     # Regression for codex review finding: a facet where almost every candidate has a distinct
     # value (e.g. raw per-product feature text) must not be selectable as a closed-choice question
-    # just because its raw entropy is high -- it's not presentable as 2-4 options.
+    # just because its raw entropy is high -- it's not presentable as 2-4 options. Pool size (30)
+    # chosen to exceed overgenerality._MAX_DISTINCT_VALUES (calibrated to 15 in Phase 1.3) with
+    # near-unique feature text, while color still only ever takes 2 values regardless of pool size.
     candidates = [{"attributes": {"feature": f"unique feature text {i}", "color": "black" if i % 2 else "red"}}
-                  for i in range(10)]
+                  for i in range(30)]
     attr = select_best_question(candidates, filled_slots=set(), attribute_enum=["feature", "color", "other", "brand"])
-    assert attr == "color"  # color has 2 presentable values; feature has 10 near-unique ones
+    assert attr == "color"  # color has 2 presentable values; feature has 30 near-unique ones
 
 
 def test_no_new_info_turn_does_not_trigger_rejection():

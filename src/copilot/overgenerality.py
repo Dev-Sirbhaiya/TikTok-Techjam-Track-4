@@ -47,8 +47,13 @@ _UNPRODUCTIVE_ATTRIBUTES = {"other", "brand"}
 # bucketing fixed this for "budget" (catalog.py's price_bucket()) but the same problem resurfaces for
 # any facet with inherently high cardinality (e.g. "feature", a free-text proxy). Rather than special-
 # casing every such facet, cap candidacy to a sane distinct-value range here, once, for all facets.
-_MIN_DISTINCT_VALUES = 2   # nothing to ask if everyone already agrees
-_MAX_DISTINCT_VALUES = 8   # more than this isn't a presentable closed-choice question
+_MIN_DISTINCT_VALUES = 2    # nothing to ask if everyone already agrees
+_MAX_DISTINCT_VALUES = 15   # Phase 1.3 calibration: 8 was too tight -- phrase_question() only ever
+                            # shows the top 3 most common values regardless of how many distinct
+                            # values exist, so a facet with e.g. 12 colors is still a fine question
+                            # (top 3 covers the pool's real texture); the cap only needs to exclude
+                            # near-unique catch-alls like raw per-product feature text (~pool_size
+                            # distinct values), not moderately-diverse categorical facets.
 
 
 def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str]) -> str | None:

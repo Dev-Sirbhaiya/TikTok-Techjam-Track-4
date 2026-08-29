@@ -11,7 +11,8 @@ _LOG_PATH = Path(os.environ.get("COPILOT_TURN_LOG", "turn_log.jsonl"))
 _ENABLED = os.environ.get("COPILOT_DISABLE_LOGGING", "") == ""
 
 
-def log_turn_rationale(session_id: str, turn: int, state, action: str, top_candidates: list[dict]) -> None:
+def log_turn_rationale(session_id: str, turn: int, state, action: str, top_candidates: list[dict],
+                        trace=None) -> None:
     if not _ENABLED:
         return
     entry = {
@@ -26,6 +27,9 @@ def log_turn_rationale(session_id: str, turn: int, state, action: str, top_candi
             {"parent_asin": c.get("parent_asin"), "score": round(c.get("_score", 0.0), 5)}
             for c in top_candidates
         ],
+        # Phase 1.4 (FR-8): named adaptive-orchestration decisions, so "Adaptive Orchestration" is
+        # demonstrable from the log, not just implemented in code no one can point to.
+        "orchestration_decisions": trace.decisions if trace is not None else [],
     }
     try:
         with _LOG_PATH.open("a", encoding="utf-8") as fh:

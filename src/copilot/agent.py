@@ -13,6 +13,7 @@ from .catalog import CatalogIndex, build_gazetteer, load_catalog
 from .intent_router import route_intent
 from .logging_ import log_turn_rationale
 from .nlu import apply_extraction, extract_slot_updates
+from .orchestrator import OrchestrationTrace, decide_rerank_depth, record_action, route_retrieval_breadth
 from .overgenerality import score_entropy, select_best_question
 from .phrasing import phrase_question, phrase_recommendation
 from .preference import preference_boost, update_preference_vectors
@@ -69,8 +70,13 @@ class Agent:
         track = route_intent(user_message, state.slots, self.gazetteer)
         state.buying_intent_score = 0.8 if track == "buying" else 0.3
 
+        # Phase 1.4 (FR-8): named, logged adaptive-orchestration decision points, replacing what
+        # used to be inline unlabeled branches -- see orchestrator.py.
+        trace = OrchestrationTrace()
+        apply_hard_filter = route_retrieval_breadth(state.buying_intent_score, trace)
+
         query_text = " ".join(state.accumulated_terms) or user_message
-        candidates = retrieve_candidates(query_text, state.slots, state.buying_intent_score, self.catalog_index)
+        candidates = retrieve_candidates(query_text, state.slots, apply_hard_filter, self.catalog_index)
         candidates = apply_rejection_filter(candidates, state)
 
         turn_embedding = self.catalog_index.encode_text(query_text)
@@ -84,10 +90,12 @@ class Agent:
         entropy = score_entropy([c["_score"] for c in candidates[:10]]) if candidates else 0.0
         state.pool_entropy = entropy
 
-        ranked = rerank(candidates[:50], state, state.accumulated_terms)
+        rerank_depth = decide_rerank_depth(len(candidates), trace)
+        ranked = rerank(candidates[:rerank_depth], state, state.accumulated_terms)
         state.candidate_pool = [c["parent_asin"] for c in ranked]
 
         action = decide_turn_action(state, entropy, len(ranked))
+        record_action(action, entropy, state.turns_remaining, trace)
 
         response: dict = {"message": "", "ask_attribute": None, "recommendations": []}
         if ranked:
@@ -106,6 +114,6 @@ class Agent:
         if action == "commit" or not response["message"]:
             response["message"] = phrase_recommendation(ranked[:top_k])
 
-        log_turn_rationale(session_id, turn, state, action, ranked[:3])
+        log_turn_rationale(session_id, turn, state, action, ranked[:3], trace)
         state.turn_count = turn
         return response

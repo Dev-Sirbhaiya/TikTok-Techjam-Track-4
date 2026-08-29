@@ -27,10 +27,13 @@ def reciprocal_rank_fusion(ranked_lists: list[list[str]], k: int = 60,
 def retrieve_candidates(
     query_text: str,
     slots: dict,
-    buying_intent_score: float,
+    apply_hard_filter: bool,
     catalog_index: CatalogIndex,
     k_pool: int = 60,
 ) -> list[dict]:
+    """`apply_hard_filter` is decided by orchestrator.route_retrieval_breadth(), not derived here --
+    Phase 1.4 (FR-8): retrieval is a pure mechanism, the orchestrator layer owns strategy decisions
+    (this used to inline `buying_intent_score > 0.6` directly in this function)."""
     bm25_ranked = catalog_index.bm25_search(query_text, top_n=150)
     dense_ranked = catalog_index.dense_search(query_text, top_n=150)
     metadata_ranked = catalog_index.metadata_rank(slots, top_n=150)
@@ -40,7 +43,7 @@ def retrieve_candidates(
         return []
 
     restrict_to = None
-    if buying_intent_score > 0.6:
+    if apply_hard_filter:
         hard = catalog_index.apply_hard_filters(slots)
         if hard:
             restrict_to = hard
