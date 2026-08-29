@@ -28,8 +28,8 @@ things stand.
 | Pillar II — Dialog state machine & clarification | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | 26 unit tests passing, validated end-to-end |
 | Pillar III — Context distillation & adaptive orchestration | main session | done (Phase 0), Phase 1.4 pending | 2026-08-29 | 2026-08-29 | preference vectors done; named adaptive state machine deferred to Phase 1.4 |
 | Pillar IV — Evaluator integration & metrics tracking | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | `tools/run_eval.py` is the standing "one command to run" |
-| Phase 1 — cheap refinements + calibration (1.1-1.4) | main session | not started | — | — | next up, per `status.md` — includes the buying-track calibration flagged above |
-| Phase 2 — gated ablations (multi-interest, bandit, VoI) | unassigned | not started | — | — | per user's continue-iterating directive, attempted after Phase 1 |
+| **Phase 1 implementation + closeout** (calibration split, ratio-gated facet selection, named orchestrator, 1 codex review fully triaged) | main session | **done** | 2026-08-29 | 2026-08-29 | TechnicalScore 0.4087 (+24.5% vs Phase 0) — see `wiki/08_evaluation_log.md`; buying-track regression from Phase 0 fully recovered |
+| Phase 2 — gated ablations (multi-interest, bandit, VoI) | main session | next up | — | — | per user's continue-iterating directive |
 | Phase 3 — offline tuning + comparative feedback | unassigned | not started | — | — | per user's continue-iterating directive |
 | Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | scheduled as Phase 5, `implementation/05_BUILD_PLAN.md` |
 

@@ -189,6 +189,35 @@ also get logged here (with a link to the full report under `reviews/`).
 - User set a broader `/goal`: continue directly through Phase 1, 2, 3 (each with its own codex
   review + benchmark), not stopping to ask between phases. Proceeding to Phase 1 next.
 
+## 2026-08-29 (cont.) — Phase 1 CLOSED OUT: calibration recovers the buying regression, +24.5%
+
+- Steps 1.1/1.2 (audit RRF purity, entropy formula) needed no changes — already correct from
+  Phase 0's own review fixes. Step 1.3: created the pre-registered train/validation split
+  (`tools/make_split.py`) and a split-aware eval runner (`tools/run_eval_split.py`). Step 1.4:
+  added `orchestrator.py` — named, logged adaptive decision points (`retrieval_breadth`,
+  `rerank_depth`, `turn_action`), moving the hard-filter strategy decision out of `retrieval.py`
+  (now a pure mechanism) per FR-8.
+- Codex review (`wiki/reviews/phase1-1.1-1.4-2026-08-29.raw.txt`) found 4 real issues, all fixed:
+  the facet distinct-value cap fix from Phase 0 didn't scale down (a near-unique facet in a
+  *small* reranked pool could still slip under the absolute cap) — added a distinct-value/pool-size
+  ratio gate (≤0.5) that catches it at any pool size; the split's hash-threshold produced 35/165
+  instead of the pre-registered 40/160 — fixed to sort-and-take-exactly-N; the orchestration trace
+  recorded the pre-fallback action, disagreeing with what was actually sent — moved after fallback
+  resolution; and the architecture wiki was stale relative to the actual Phase 1.4 state.
+- **Discovered mid-fix**: background evaluator runs were being killed externally three times in a
+  row for unclear reasons (not by this session), while the earlier Phase 0 full-200 runs had
+  completed fine as background tasks — switched to running the evaluator in the **foreground**
+  instead (accepting the tool's ~10-minute cap, with the harness auto-backgrounding runs that
+  exceed it), which completed reliably. Worth remembering if evaluator runs mysteriously stall again.
+- **Full Phase 1 exit result (200 sessions, locked config): TechnicalScore 0.4087** — up from Phase
+  0's 0.328379 (+24.5%). Every scenario improved with zero regressions, and critically, **the
+  buying-track regression flagged at Phase 0 exit fully recovered** (0.3625, matching Phase 0's
+  original pre-bug-fix number, but now with the underlying bugs actually fixed, not just working
+  around them). Validated on the held-out 40-session split first (0.382, consistent with training's
+  0.402 — no overfitting to the sweep) before locking the configuration in.
+- Phase 1 exit criteria (`05_BUILD_PLAN.md`): no regressions vs. Phase 0 — met and substantially
+  exceeded. Proceeding directly to Phase 2 per the user's standing `/goal`.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside
