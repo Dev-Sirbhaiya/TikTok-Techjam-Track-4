@@ -47,16 +47,22 @@ def retrieve_candidates(
     apply_hard_filter: bool,
     catalog_index: CatalogIndex,
     k_pool: int = 60,
+    query_embedding_hook=None,
 ) -> tuple[list[dict], float]:
     """`apply_hard_filter` is decided by orchestrator.route_retrieval_breadth(), not derived here --
     Phase 1.4 (FR-8): retrieval is a pure mechanism, the orchestrator layer owns strategy decisions
     (this used to inline `buying_intent_score > 0.6` directly in this function).
 
+    `query_embedding_hook`, if given, is forwarded to `catalog_index.dense_search()` -- Phase 3.5
+    (phase2/query_nudge.py) uses it to nudge the dense search vector toward accumulated positive
+    preference; retrieval.py stays decoupled from phase2/ (no import), same pattern as
+    overgenerality.py's utility_fn.
+
     Returns (candidates, bm25_dense_disagreement) -- Phase 2.3/2.5 (phase2/voi.py) needs the
     disagreement signal, computed here (not recomputed by the caller) since the BM25/dense
     searches already happened -- recomputing them a second time would double retrieval cost."""
     bm25_ranked = catalog_index.bm25_search(query_text, top_n=150)
-    dense_ranked = catalog_index.dense_search(query_text, top_n=150)
+    dense_ranked = catalog_index.dense_search(query_text, top_n=150, query_embedding_hook=query_embedding_hook)
     metadata_ranked = catalog_index.metadata_rank(slots, top_n=150)
     disagreement = retriever_disagreement(bm25_ranked, dense_ranked)
 

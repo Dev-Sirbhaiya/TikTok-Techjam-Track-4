@@ -73,3 +73,13 @@ class MultiInterestState:
         total_w = sum(self.weights) or 1.0
         probs = [w / total_w for w in self.weights]
         return lam * sum(p * float(np.dot(product_embedding, v)) for p, v in zip(probs, self.vectors))
+
+    def dominant_vector(self) -> Optional[np.ndarray]:
+        """The single highest-weight tracked vector -- what a K=1 caller (e.g.
+        phase2/query_nudge.py) should treat as "the" accumulated positive-preference direction,
+        regardless of whether multi-interest tracking is enabled (if disabled, there is always
+        exactly one vector, so this is just it)."""
+        if not self.vectors:
+            return None
+        best_idx = int(np.argmax(self.weights)) if self.weights else 0
+        return self.vectors[best_idx]

@@ -419,11 +419,17 @@ class CatalogIndex:
             pass  # best-effort; this run still has working embeddings in memory regardless
         return True
 
-    def dense_search(self, query_text: str, top_n: int = 150) -> list[str]:
+    def dense_search(self, query_text: str, top_n: int = 150, query_embedding_hook=None) -> list[str]:
+        """`query_embedding_hook(embedding) -> embedding`, if given, runs after text encoding and
+        before the similarity search -- lets a caller nudge the search vector (e.g.
+        phase2/query_nudge.py) without catalog.py importing phase2/ (same decoupling pattern as
+        overgenerality.py's utility_fn and retrieval.py's disagreement signal)."""
         if not self._ensure_dense_ready():
             return []
         import numpy as np
         q_emb = self._embed_model.encode([query_text], normalize_embeddings=True)[0]
+        if query_embedding_hook is not None:
+            q_emb = query_embedding_hook(q_emb)
         sims = self._embeddings @ q_emb
         top_idx = np.argpartition(-sims, min(top_n, len(sims) - 1))[:top_n]
         top_idx = top_idx[np.argsort(-sims[top_idx])]

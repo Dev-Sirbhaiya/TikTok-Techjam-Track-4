@@ -4,8 +4,8 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-30 (Phase 3 closed out; Phase 3.5's Ablation 4 shipped a genuine +6.4% optional
-LLM-booster win; continuing Phase 3.5's remaining items)
+Last updated: 2026-08-30 (Phase 3.5: 2 of 3 new mechanisms kept, guaranteed-path score raised to
+0.415731; continuing Phase 3.5's remaining build-plan items)
 
 ## Current phase
 
@@ -58,27 +58,58 @@ regressions. **Enabled by default.** Full 200-session confirmatory run: **Techni
 **Critical caveat — do not lose this in future summaries**: the organizer provides no hosted model
 credentials for official grading, and this key exists only in this session's local `.env`, never
 shipped in the submission. The official private-set score will almost certainly be measured
-*without* this key, meaning this mechanism is inert during real judging. **The realistic expected
-submission score remains TechnicalScore 0.40927** (the guaranteed cross-encoder-only path); 0.43531
-is a validated bonus/stretch number for the writeup and demo, never "the" score. Full detail:
+*without* this key, meaning this mechanism is inert during real judging. Full detail:
 `implementation/06_DECISION_LOG.md` D-LLM-TIER, `implementation/08_ABLATION_MATRIX.md` Ablation 4.
+
+## Current phase (cont.) — guaranteed-path accuracy pushed further: calibration finding → 2 new ablations
+
+User explicitly pushed back that "beats baseline" isn't enough for a worldwide competition and asked
+to keep improving, specifically flagging that gains need to count on the actual (no-API-key)
+scoring path. Ran the cheap uncertainty-calibration check already scoped for Phase 3.5
+(`tools/calibration_check.py`) against the full 200 sessions: **101/200 sessions ever reach a
+genuinely forced commit** (the rest hit earlier during an "ask" turn, since recommendations are
+always populated regardless of action); of those 101, **100% sit at high commit-time entropy
+(0.7-1.0) and hit at a 2.97% rate**. This directly identified the system's biggest weak point.
+
+- **Ablation 6 — portfolio/slate hedging** (`phase2/slate_hedging.py`), built to target that exact
+  finding: reserve 60% of slots for pure best-by-score, hedge the rest across facet diversity when a
+  forced commit is still high-entropy. Training split: +1.9% TechnicalScore, +2.5% HitRate@10, gains
+  concentrated in `buying` (+7.7%), zero regressions. **Enabled.** New guaranteed-path full-200 exit:
+  **TechnicalScore 0.415731** (up from 0.40927) — this is the number to report as the expected
+  competition score.
+- **Ablation 7 — query-vector nudge** (`phase2/query_nudge.py`, user-suggested): blend the dense
+  retrieval query embedding itself with accumulated positive preference, not just post-hoc
+  reranking. Training split: consistent regression (-2.4% TechnicalScore, every metric down).
+  **Cut** — honestly tested, didn't earn its keep, plausibly because it weakens BM25/dense
+  complementarity in RRF fusion.
+- With everything kept enabled (LLM booster + slate hedging): full 200-session TechnicalScore
+  **0.438299** — the two mechanisms compose without conflict. **0.415731 remains the number to
+  report as the expected competition score**; 0.438299 is the optional ceiling with a key present.
+
+Codex review for the LLM booster commit (`21912ef`) failed 2 more attempts (same environment
+flakiness pattern) — see Blockers.
 
 ## Next workstream
 
-**Continue `implementation/05_BUILD_PLAN.md` Phase 3.5's remaining items.**
+**Continue pushing guaranteed-path accuracy, then close out Phase 3.5.**
 
-Ablation 4 (LLM booster) is done. Remaining: portfolio/slate hedging (reserve top slots for
-highest-confidence matches, hedge remaining slots across plausible alternative interpretations —
-its original rationale, "esp. if 2.1's multi-interest is kept," no longer applies since
-multi-interest was cut in Phase 2, so evaluate on its own merits); uncertainty calibration (check
-whether entropy/confidence actually correlates with real hit-rate outcomes on held-out sessions —
-cheap, since already-logged per-turn entropy via `logging_.py` can be bucketed against actual hit
-outcomes with no new agent code); counterfactual/synthetic rollout augmentation (only if the
-evaluator is confirmed genuinely replayable with counterfactual actions — the most expensive item,
-decide last). Given the LLM booster's strong result, also worth a quick look: whether an LLM-assisted
-query-understanding/expansion step (pre-retrieval) shows similar gains, time permitting — but only
-after the three build-plan items above are resolved. Then Phase 3.5's exit codex review, full
-200-session benchmark, phase-closeout, then Phase 4 per the standing goal.
+Done so far: Ablation 4 (LLM booster, optional/environment-dependent), uncertainty calibration
+(cheap diagnostic, drove the next two), Ablation 6 (slate hedging, KEPT, guaranteed-path score now
+0.415731), Ablation 7 (query-vector nudge, CUT). Remaining build-plan item: counterfactual/synthetic
+rollout augmentation (only if the evaluator is confirmed genuinely replayable with counterfactual
+actions — the most expensive item; we now have deep, verified knowledge of
+`evaluator/local_evaluator.py`'s source, including that `customer_reply()` is a pure function of
+`(sample, ask_attribute, disclosed, boundary_used)` with a per-session `rng` only used for the
+override-turn choice — check whether this makes clean counterfactual replay actually feasible before
+investing time). Given the user's explicit priority is guaranteed-path accuracy specifically (not
+just "beats baseline"), also worth investigating next, roughly in this order: (1) whether the
+`buying`/`intent_override` scenarios' still-lower hit rates (vs. `browsing`/`boundary`) point to a
+retrieval-precision gap specific to hard-filtered pools, not just a clarification-policy issue; (2)
+whether `metadata_rank()`'s fusion weight relative to BM25/dense in RRF is itself tunable (currently
+implicit equal-weighting via RRF's `1/(k+rank)` per leg — an explicit weighted-RRF variant is
+untested); (3) an LLM-assisted query-understanding/expansion step (pre-retrieval), time permitting,
+though note this would share the same API-key-availability caveat as Ablation 4. Then Phase 3.5's
+exit codex review, full 200-session benchmark, phase-closeout, then Phase 4 per the standing goal.
 
 ## Blockers
 
@@ -93,6 +124,20 @@ after the three build-plan items above are resolved. Then Phase 3.5's exit codex
   a real bug (`wiki/reviews/phase3.1-determinism-fix-2026-08-30.md`); only the broader consolidated
   `--base`-diff review specifically is blocked. If codex becomes reliable again for `--base`-style
   reviews, run it against `4aeaaff` before Phase 3.5's own review to close this gap retroactively.
+
+- **`codex exec review --commit 21912ef` (the LLM booster commit) also failed 2 consecutive
+  attempts** (2026-08-30) — same environment-flakiness pattern, not code issues: attempt 1 was cut
+  off mid file-listing exploration with no verdict; attempt 2 got further (correctly found
+  `anthropic`/`python-dotenv` declared in `requirements.txt`) but was cut off after a `pip show
+  anthropic` false alarm (codex's shell resolved the system Python, not `.venv`, so it reported the
+  package "not found" even though it's correctly installed in the project's actual venv) — likely
+  chased that down without concluding. This is now a clear, repeating pattern (4 of the last 6
+  review attempts this session failed to reach a verdict) — codex review is currently unreliable in
+  this environment for anything beyond a narrowly-scoped single-commit diff with light exploration
+  needs. Not blocking further work: the ablation's own empirical results (consistent wins across two
+  independent splits, on every metric, zero regressions) are strong independent validation, and the
+  fallback-on-failure code path (`except Exception: pass`) is identical to the already-reviewed
+  Phase 0 pattern. Retry this specific review when codex proves reliable again.
 
 ## Recent activity
 

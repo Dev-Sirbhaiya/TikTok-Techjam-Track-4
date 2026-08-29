@@ -75,6 +75,28 @@ guaranteed cross-encoder-only number (full 200 sessions: TechnicalScore 0.40927)
 realistic expected submission score. Full detail: `implementation/06_DECISION_LOG.md` D-LLM-TIER,
 `wiki/08_evaluation_log.md`.
 
+### Ablation 6 (new, Phase 3.5) — Portfolio/slate hedging on vs. off (gates the calibration-driven hedging item)
+**Motivation**: `tools/calibration_check.py` (2026-08-30) found sessions reaching a genuinely FORCED
+commit (out of turns, or nothing productive left to ask) are ~100% still at high entropy (0.7-1.0)
+and hit at a dismal 2.97% rate — pure top-K-by-score recommends near-duplicates of the single most-
+likely interpretation exactly when that interpretation is least likely to be right.
+**RESULT**: validation split (n=40, LLM booster off to isolate) ON 0.376071 vs OFF 0.375938 (flat —
+too few forced-commit sessions at this sample size); training split (n=160, confirmatory) ON
+**0.425645** vs OFF 0.417604 — a real, modest win (+1.9% TechnicalScore, +2.5% HitRate@10), gains
+concentrated in `buying` (+7.7% hit rate), zero regressions. **ENABLED by default**
+(`phase2/slate_hedging.py`, `ENABLE_SLATE_HEDGING = True`) — on the guaranteed path, so this
+directly raises the expected competition score to TechnicalScore 0.415731 (full 200 sessions).
+
+### Ablation 7 (new, Phase 3.5) — Query-vector nudge on vs. off (user-suggested)
+**Motivation**: nudge the dense retrieval QUERY EMBEDDING itself toward accumulated positive
+preference signal, not just post-hoc reranking — could in principle expand retrieval recall rather
+than only reorder an already-fetched pool.
+**RESULT**: validation split (n=40) ON 0.377333 vs OFF 0.376071 (a wash); training split (n=160,
+confirmatory) ON 0.415642 vs OFF **0.425645** — a consistent regression on every metric on the
+larger split. Plausible cause: nudging only the dense leg away from the literal current-turn text
+reduces the BM25/dense complementarity RRF fusion relies on. **CUT**
+(`phase2/query_nudge.py`, `ENABLE_QUERY_VECTOR_NUDGE = False`).
+
 ### Ablation 5 (new) — Preference-vector boost on vs. off (gates D-PROFILE's ranking effect)
 **Procedure**: Phase 0 with `preference_boost()` disabled vs. enabled. **Watch**: MRR/HitRate@10 on
 turn 3+ specifically (early turns have little preference signal accumulated yet — the effect should

@@ -455,6 +455,46 @@ material for the writeup and demo — "built and ablated an optional LLM reranki
 available" — but must never be presented as the expected competition score. Documented in
 `implementation/06_DECISION_LOG.md` D-LLM-TIER and `08_ABLATION_MATRIX.md` Ablation 4.
 
+**User pushed back explicitly**: "beats baseline" isn't good enough for a worldwide competition;
+wants genuine accuracy pushed further, on the GUARANTEED (no-API-key) path specifically since that's
+what's actually scored. Ran the cheap uncertainty-calibration check from Phase 3.5's own scoping
+note (`tools/calibration_check.py` — joins the per-turn log against evaluator results by execution
+order, since the evaluator never exposes `sample_id` to the Agent) against the full 200 sessions.
+**Finding**: only 101/200 sessions ever reach a genuinely FORCED commit (the rest hit earlier while
+still on an "ask" turn, since recommendations are always populated regardless of action); of those
+101, **100% sit at high commit-time entropy (0.7-1.0) and hit at a dismal 2.97% rate**. This directly
+identifies where the system fails hardest: forced-commit-while-still-ambiguous sessions.
+
+**Ablation 6 — portfolio/slate hedging** (`phase2/slate_hedging.py`), built specifically to target
+that finding: on a forced commit above the entropy threshold, reserve the top 60% of slots for pure
+best-by-score, fill the remainder by greedily maximizing facet diversity (color/material/style/
+category) among the rest of the ranked pool, hedging against the single most-likely interpretation
+being wrong. Original build-plan framing ("esp. if 2.1's multi-interest is kept") no longer applies
+since multi-interest was cut in Phase 2 — evaluated on its own merits instead. Result: validation
+split flat (too few forced-commit sessions at n=40 to show it), training split (n=160) a real win —
+TechnicalScore +1.9%, HitRate@10 +2.5%, gains concentrated in `buying` (+7.7% hit rate) exactly
+matching the calibration diagnosis, zero regressions. **Enabled by default.** Full 200-session
+guaranteed-path confirmatory run: **TechnicalScore 0.415731** (up from 0.40927) — this is on the
+guaranteed path, so it's a real improvement to the expected competition score, not just a demo
+number.
+
+**Ablation 7 — query-vector nudge** (`phase2/query_nudge.py`), user-suggested: blend the dense
+retrieval query embedding itself with the accumulated positive-preference vector (via
+`MultiInterestState.dominant_vector()`, a new accessor), rather than only reordering post-hoc —
+motivated by the idea that a style/aesthetic preference not well captured in the accumulated query
+TEXT might still be recoverable in embedding space, expanding retrieval recall rather than just
+reranking. Wired through `catalog.dense_search()`'s new `query_embedding_hook` param (kept decoupled
+from `phase2/`, same pattern as `overgenerality.py`'s `utility_fn`). Result: validation split a wash,
+training split a **consistent regression on every metric** (TechnicalScore -2.4%, browsing and
+buying both down). Plausible cause: nudging only the dense leg away from the literal current-turn
+text reduces the BM25/dense complementarity RRF fusion relies on, rather than adding genuinely new
+recall. **Cut** — a well-motivated idea, honestly tested, that didn't earn its keep on this data.
+
+**Full 200-session run with everything kept enabled (LLM booster + slate hedging)**: TechnicalScore
+**0.438299** — confirms the two surviving mechanisms compose without conflict, a further small lift
+over the LLM-booster-alone number. **0.415731 remains the number to report as the expected
+competition score**; 0.438299 is the optional ceiling with a key present.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside

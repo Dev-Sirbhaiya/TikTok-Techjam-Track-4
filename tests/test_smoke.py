@@ -363,3 +363,76 @@ def test_override_resets_accumulated_terms_to_new_intent():
     apply_extraction(state, extraction, turn=4)
     assert "black" not in state.accumulated_terms
     assert "leather shoes" in state.accumulated_terms
+
+
+def test_hedge_slate_disabled_returns_plain_top_k():
+    import copilot.phase2.slate_hedging as sh
+    ranked = [{"parent_asin": f"p{i}", "attributes": {"color": "red"}} for i in range(20)]
+    assert sh.hedge_slate(ranked, top_k=10, entropy=0.9) == ranked[:10]
+
+
+def test_hedge_slate_diversifies_when_enabled_and_ambiguous():
+    import copilot.phase2.slate_hedging as sh
+    original = sh.ENABLE_SLATE_HEDGING
+    sh.ENABLE_SLATE_HEDGING = True
+    try:
+        # Top 6 (reserved, 60% of top_k=10) are all "red"; the tail of the ranked list has other
+        # colors available -- hedging should pull some of those into the remaining 4 slots instead
+        # of just continuing the all-red run.
+        reserved = [{"parent_asin": f"r{i}", "attributes": {"color": "red"}} for i in range(6)]
+        tail = [{"parent_asin": f"t{i}", "attributes": {"color": c}} for i, c in
+                enumerate(["red", "blue", "green", "black", "red", "yellow"])]
+        ranked = reserved + tail
+        slate = sh.hedge_slate(ranked, top_k=10, entropy=0.9)
+        assert len(slate) == 10
+        colors = {c["attributes"]["color"] for c in slate}
+        assert len(colors) > 1  # diversified, not a pure top-10-by-score red monoculture
+    finally:
+        sh.ENABLE_SLATE_HEDGING = original
+
+
+def test_hedge_slate_noop_below_entropy_threshold():
+    import copilot.phase2.slate_hedging as sh
+    original = sh.ENABLE_SLATE_HEDGING
+    sh.ENABLE_SLATE_HEDGING = True
+    try:
+        ranked = [{"parent_asin": f"p{i}", "attributes": {"color": "red"}} for i in range(20)]
+        assert sh.hedge_slate(ranked, top_k=10, entropy=0.1) == ranked[:10]
+    finally:
+        sh.ENABLE_SLATE_HEDGING = original
+
+
+def test_query_nudge_disabled_is_noop():
+    import numpy as np
+    from copilot.phase2.query_nudge import nudge_query_embedding
+    q = np.array([1.0, 0.0, 0.0])
+    pref = np.array([0.0, 1.0, 0.0])
+    result = nudge_query_embedding(q, pref)  # ENABLE_QUERY_VECTOR_NUDGE is False by default
+    assert np.array_equal(result, q)
+
+
+def test_query_nudge_blends_toward_preference_when_enabled():
+    import numpy as np
+    import copilot.phase2.query_nudge as qn
+    original = qn.ENABLE_QUERY_VECTOR_NUDGE
+    qn.ENABLE_QUERY_VECTOR_NUDGE = True
+    try:
+        q = np.array([1.0, 0.0, 0.0])
+        pref = np.array([0.0, 1.0, 0.0])
+        result = qn.nudge_query_embedding(q, pref, weight=0.5)
+        assert np.isclose(np.linalg.norm(result), 1.0)  # renormalized
+        assert result[1] > 0.0  # pulled toward the preference vector's direction
+    finally:
+        qn.ENABLE_QUERY_VECTOR_NUDGE = original
+
+
+def test_query_nudge_noop_with_no_preference_vector_yet():
+    import numpy as np
+    import copilot.phase2.query_nudge as qn
+    original = qn.ENABLE_QUERY_VECTOR_NUDGE
+    qn.ENABLE_QUERY_VECTOR_NUDGE = True
+    try:
+        q = np.array([1.0, 0.0, 0.0])
+        assert np.array_equal(qn.nudge_query_embedding(q, None), q)
+    finally:
+        qn.ENABLE_QUERY_VECTOR_NUDGE = original

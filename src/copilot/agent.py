@@ -16,6 +16,8 @@ from .nlu import apply_extraction, extract_slot_updates
 from .orchestrator import OrchestrationTrace, decide_rerank_depth, record_action, route_retrieval_breadth
 from .overgenerality import score_entropy, select_best_question
 from .phase2.action_policy import record_outcome, utility_multiplier
+from .phase2.query_nudge import nudge_query_embedding
+from .phase2.slate_hedging import hedge_slate
 from .phase2.voi import adjusted_clarify_threshold
 from .phrasing import phrase_question, phrase_recommendation
 from .preference import update_preference_vectors
@@ -98,7 +100,16 @@ class Agent:
         apply_hard_filter = route_retrieval_breadth(state.buying_intent_score, trace)
 
         query_text = " ".join(state.accumulated_terms) or user_message
-        candidates, disagreement = retrieve_candidates(query_text, state.slots, apply_hard_filter, self.catalog_index)
+        # Phase 3.5: nudge dense retrieval toward accumulated positive preference (state.multi_interest
+        # as of the END of the PREVIOUS turn -- it hasn't been updated with this turn's signal yet,
+        # which is exactly the "everything positively signaled so far" semantics this wants).
+        # query_nudge.nudge_query_embedding is itself a no-op unless phase2.query_nudge.
+        # ENABLE_QUERY_VECTOR_NUDGE is on, so this is always safe to pass through.
+        prior_pref_vector = state.multi_interest.dominant_vector() if state.multi_interest else None
+        candidates, disagreement = retrieve_candidates(
+            query_text, state.slots, apply_hard_filter, self.catalog_index,
+            query_embedding_hook=lambda emb: nudge_query_embedding(emb, prior_pref_vector),
+        )
         candidates = apply_rejection_filter(candidates, state)
 
         turn_embedding = self.catalog_index.encode_text(query_text)
@@ -150,8 +161,6 @@ class Agent:
         action = decide_turn_action(state, entropy, len(ranked), low=clarify_low)
 
         response: dict = {"message": "", "ask_attribute": None, "recommendations": []}
-        if ranked:
-            response["recommendations"] = [{"parent_asin": c["parent_asin"]} for c in ranked[:top_k]]
 
         excluded = set(state.slots.keys()) | state.exhausted_attributes
         if action in ("ask", "both"):
@@ -168,8 +177,17 @@ class Agent:
             else:
                 action = "commit"  # nothing productive left to ask -- fall through to commit phrasing
 
+        # Phase 3.5: slate hedging only applies to a genuinely FORCED commit (out of turns, or
+        # nothing productive left to ask) -- a diagnostic (tools/calibration_check.py) found these
+        # specific turns are the ones still stuck at high entropy with a near-zero hit rate; "ask"/
+        # "both" turns already resolve most sessions fine with plain top-K. No-op below the entropy
+        # threshold or when disabled (returns ranked[:top_k] unchanged either way).
+        top_slate = hedge_slate(ranked, top_k, entropy) if action == "commit" else ranked[:top_k]
+        if ranked:
+            response["recommendations"] = [{"parent_asin": c["parent_asin"]} for c in top_slate]
+
         if action == "commit" or not response["message"]:
-            response["message"] = phrase_recommendation(ranked[:top_k])
+            response["message"] = phrase_recommendation(top_slate)
 
         # CORRECTED per codex review: this used to be recorded right after decide_turn_action(),
         # before the "nothing productive to ask" fallback above could downgrade "ask"/"both" to
