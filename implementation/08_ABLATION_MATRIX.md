@@ -1,0 +1,80 @@
+# 08 — Ablation Matrix
+
+Supersedes `/My Ideas/06_ABLATIONS_AND_METRICS.md` — same governing rule and procedure (well-designed
+originally), extended with the internal-baseline steps this corpus adds in Phase 0/1.
+
+## The rule
+
+> A technique being real, published, and well-cited is never sufficient justification for keeping it
+> in this system. If a component doesn't measurably improve held-out results on our own dev sessions,
+> it gets removed or demoted — never kept because a paper exists for it.
+
+## Metric-tracking discipline (from Phase 0 step 0.3 onward)
+
+1. Log all three raw metrics (HitRate@10, MRR, MTTC) plus derived Efficiency/TechnicalScore after
+   **every** change, not just phase ends — append-only in `wiki/08_evaluation_log.md`, never overwrite.
+2. **Two permanent control groups**, not one: (a) the organizer's own weak BM25 baseline (0.125 /
+   0.068034 / 9.81 / 0.10671 — already recorded), and (b) this project's Phase 0 step 0.3 naive
+   stateless baseline (recorded fresh, since it already includes hybrid retrieval + RRF, unlike (a)).
+   Compare every later number against both.
+3. Watch metric trade-offs, not just aggregate improvement — a feature that helps MRR but hurts MTTC
+   needs a tuning pass before being called "kept."
+4. Split-aware evaluation from Phase 3 onward: hold out a validation subset per `10_PRE_REGISTRATION.md`
+   so offline tuning (D13) isn't validated on the data it was fit to.
+
+## Internal (non-gated) baseline checkpoints — required, not optional
+
+| Checkpoint | What it measures | Where |
+|---|---|---|
+| Baseline A | Organizer's weak BM25 starter, unmodified | Already recorded, `wiki/08_evaluation_log.md` |
+| Baseline B | This project's hybrid-retrieval-but-stateless floor | Phase 0 step 0.3 |
+| Phase 0 exit | Full Phase 0 system | Phase 0 step 0.11 |
+| Phase 1 exit | + calibrated thresholds, orchestrator polish | Phase 1 step 1.4 |
+
+## Mandatory ablations for Phase 2/3 items
+
+### Ablation 1 — Multi-interest K sweep (gates D3)
+**Procedure**: K=1 (disabled) vs. K=2/3/4, full 200 dev sessions (or training split once
+`10_PRE_REGISTRATION.md`'s split exists). **Watch**: HitRate@10 and MRR primarily, MTTC as a check (a
+more-accurate-but-slower-to-converge system may not net-win under the efficiency weight). **Decision
+rule**: keep K=1 unless some K>1 shows a non-trivial (not run-to-run-noise-sized) TechnicalScore gain;
+if kept, use the smallest K capturing most of the gain.
+
+### Ablation 2 — Static vs. adaptive action policy (gates D11)
+**Procedure**: static Phase 0/1 question-selection vs. bandit-adjusted version, same dev sessions.
+**Watch**: MTTC primarily, HitRate@10 as a check (shouldn't converge to bad guesses faster). **Decision
+rule**: keep only if MTTC improves without a HitRate@10 drop; a close/inconsistent result is a
+legitimate "tried, measured, not a clear win" writeup point, not a failure — ship the simpler static
+version if so.
+
+### Ablation 3 — Before vs. after offline strategy optimization (gates D13)
+**Procedure**: hand-tuned Phase 0/1 thresholds ("before") vs. SkillOpt-style rollout-optimized
+thresholds ("after"), both evaluated on a **held-out validation split never used for the optimization
+itself** (see `10_PRE_REGISTRATION.md`). **Decision rule**: keep only if "after" beats "before" on the
+held-out split specifically — a win only on the training split is meaningless by construction. Skip
+entirely if time is short; lowest-risk Phase 2/3 item, but not risk-free if built and never validated.
+
+### Ablation 4 (new) — Cross-encoder-only vs. cross-encoder + LLM booster (gates the D-LLM-TIER optional path)
+**Procedure**: run Phase 0's reranker with the LLM booster disabled vs. enabled (when a key is
+configured), same dev sessions. **Watch**: MRR primarily (this is a ranking-precision mechanism),
+latency/token cost as a feasibility check. **Decision rule**: only enable the LLM booster by default in
+the shipped configuration if it shows a real MRR gain that justifies the added latency/cost/dependency
+risk (R2 in `07_RISK_REGISTER.md`) — the cross-encoder-only path must remain fully functional and be
+the documented default regardless of this ablation's outcome (NFR-2 is non-negotiable, not gated).
+
+### Ablation 5 (new) — Preference-vector boost on vs. off (gates D-PROFILE's ranking effect)
+**Procedure**: Phase 0 with `preference_boost()` disabled vs. enabled. **Watch**: MRR/HitRate@10 on
+turn 3+ specifically (early turns have little preference signal accumulated yet — the effect should
+show up as the session progresses, not from turn 1). **Decision rule**: keep if it shows the
+"progressively better-targeted" effect Pillar III describes; if it shows no measurable effect,
+demote its weight (`lam`/`mu` in `04_SYSTEM_DESIGN.md`) toward zero rather than ripping out the
+mechanism entirely (it's cheap to keep at low weight and directly serves a named pillar in the
+writeup even at a small measured effect, unlike the heavier Phase 2 items).
+
+## What to do with ablation results in the writeup
+
+Every ablation run — kept or cut — is genuine deliverable material: it demonstrates deliberate,
+capable decision-making (Technical Execution, 35% weight) with concrete evidence rather than assertion.
+"We tested K=2/3/4 against K=1, found no significant TechnicalScore improvement, and shipped the
+simpler system" is a legitimate, defensible technical story. Include actual before/after numbers, not
+just the conclusion, in Phase 5.5's Devpost writeup and the README's limitations section.

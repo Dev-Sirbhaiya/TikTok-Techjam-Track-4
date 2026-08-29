@@ -4,83 +4,63 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-26 (deep research phase complete)
+Last updated: 2026-08-29 (architecture decided, implementation corpus complete, ready to build)
 
 ## Current phase
 
-**Deep research phase — complete.** All 9 parallel research agents finished (intent routing,
-hybrid retrieval, LLM reranking, dialogue state tracking, clarification generation, context
-distillation/personalization, adaptive orchestration, evaluation benchmarks, prior art + starter
-kit), synthesized into `research/DOS_AND_DONTS.md`, and cross-verified against the actual cloned
-participant repo source (not just web-fetched docs) — ground truth captured in
-`wiki/09_simulator_mechanics.md`. Pre-build — challenge window opens 2026-08-29 12:00.
+**Architecture & planning — complete. Zero implementation code written yet.** Challenge window is
+open (2026-08-29 12:00 → 2026-09-01 12:00). The user's own `/My Ideas/` design pass was reviewed,
+cross-checked against `research/DOS_AND_DONTS.md` and verified ground truth, and merged into
+`implementation/` — a 12-document corpus (problem framing, PRD, system architecture + diagram, system
+design + pseudocode, phased build plan numbered 0.1-5.5, decision log resolving every open question,
+risk register, ablation matrix, supervisor questions, pre-registration, future work, build memo).
+`implementation/00_INDEX.md` is the entry point.
 
 ## Next workstream
 
-**Ideate with the user on Pillars I-III architecture, informed by `research/DOS_AND_DONTS.md` and
-`wiki/09_simulator_mechanics.md` — no code yet, per explicit user instruction to research first.**
+**Run `implementation/05_BUILD_PLAN.md` Phase 0, starting at step 0.1.**
 
-Concretely, once the user is ready to ideate:
-1. Walk through the build-order priority from `research/DOS_AND_DONTS.md` §0: retrieval coverage
-   first (highest TechnicalScore weight, gates MRR mathematically), then ranking precision, then
-   turn-efficiency as a gate not a goal.
-2. Decide concretely, per pillar, from the ranked options each research file lays out — e.g.
-   Pillar I: gazetteer+embedding hybrid intent router vs. single LLM-call router; BM25+dense+RRF
-   retrieval stack and specific embedding model choice; cross-encoder-guaranteed reranker with
-   optional LLM booster. Each decision becomes a `wiki/02_design_decisions.md` entry and gets
-   reflected in `wiki/01_architecture.md`.
-3. Resolve the one flagged ambiguity that needs a call either way before Pillar III design locks
-   in: "long-term user profile" interpretation (research/06 recommends within-session slow-decay
-   layer, not cross-session store — see that file's dedicated section).
-4. Once Pillars I-III have a decided shape, plan implementation phases (each phase = commit +
-   background codex review + wiki update per `CLAUDE.md` §3) and update this section with the
-   first concrete implementation workstream.
+Say "run Phase 0" (or name a specific step, e.g. "run 0.4") and it executes — `CLAUDE.md` §1a binds
+this to the commit → background codex review → wiki update loop automatically, per step, no need to
+ask for that separately. Phase 0 builds the full hybrid-retrieval floor (BM25 + dense + metadata +
+RRF, dialog state, rejection memory, intent router, preference-vector boost, entropy-gated
+clarification, cross-encoder reranker, turn policy) and must clear the organizer's baseline
+(HitRate@10 0.125, MRR 0.068034, MTTC 9.81, TechnicalScore 0.10671) before Phase 1 starts — exit
+criteria and success thresholds are pre-registered in `implementation/10_PRE_REGISTRATION.md`.
+
+Two genuine open items to flag to the user before/while building (not blocking start):
+`implementation/09_SUPERVISOR_QUESTIONS.md` SQ1 (LLM provider choice, if any) and SQ2 (how far into
+gated Phase 2+ work to push given the real clock).
 
 ## Blockers
 
-- **`codex` CLI is installed but not authenticated** — `codex exec review --commit e5560788...`
-  failed with `401 Unauthorized: refresh_token_invalidated` (session expired/revoked). The
-  CLAUDE.md work-phase review step cannot run until this is fixed.
-  **Action needed from the user**: run `! codex login` to re-authenticate, then re-run the review
-  with `codex exec review --commit e5560788b47cbd8c4afb27584d55f87adbd28a61 --title "Project
-  scaffolding: living wiki + CLAUDE.md governance"` to get the deferred first review. Until then,
-  future phases should still commit + update the wiki on schedule; codex review kicks off as soon
-  as it's usable again, and any backlog gets reviewed against `--base` ranges spanning the skipped
-  phases rather than being skipped entirely.
+- None. `codex` CLI is now authenticated (user ran `codex login`) and confirmed working
+  (`codex exec "say ready"` succeeded, v0.150.1) — the review half of the work-phase loop is fully
+  operational again as of 2026-08-29.
 
 ## Recent activity
 
-- 2026-08-26 — Read and digested all four source docs; confirmed hackathon scope, timeline, hard
-  constraints, and evaluation metrics (`wiki/00_problem_statement.md`).
-- 2026-08-26 — Initialized git repo, built living wiki (`wiki/`), wrote `CLAUDE.md` enforcement
-  rules for the commit + codex-review + wiki-update work-phase loop.
-- 2026-08-26 — **External resource import completed successfully, no blockers.** Participant repo
-  cloned (`external/techjam-conversational-search/` @ `9a35be5`), participant kit downloaded and
-  **SHA256-verified** (`data/participant-kit/`), venv set up at `.venv/` (confirmed stdlib-only —
-  no dependencies to install), and the unmodified starter BM25 agent run through the local
-  evaluator: **Hit Rate@10 0.125, MRR 0.068034, MTTC 9.81, TechnicalScore 0.10671** — this is now
-  our regression floor (`wiki/08_evaluation_log.md`). Full detail in
-  `wiki/07_external_resources.md` (checklist fully checked off).
-- 2026-08-26 — **Deep research phase completed, all 9 agents, no blockers.** `research/0X_*.md`
-  covers all four problem-statement pillars plus evaluation methodology and prior art, each with
-  citations and topic-scoped Dos/Don'ts. Synthesized into `research/DOS_AND_DONTS.md`. In parallel,
-  personally verified the actual evaluator/starter-agent source code (not just docs) and captured
-  ground-truth session/scoring mechanics in new page `wiki/09_simulator_mechanics.md` — confirmed
-  the TechnicalScore formula directly from source, confirmed category is disclosed turn-1 in every
-  scenario, confirmed the exact clarification-reveal heuristic, confirmed local dev requires
-  editing `starter/agent.py` in place (hardcoded import, no override flag).
+- 2026-08-26 — Project scaffolding, external resource import (baseline recorded: HitRate@10 0.125 /
+  MRR 0.068034 / MTTC 9.81 / TechnicalScore 0.10671), 9-agent deep research phase, ground-truth
+  simulator mechanics captured (`wiki/09_simulator_mechanics.md`). See prior entries below and
+  `wiki/03_design_log.md` for full detail.
+- 2026-08-29 — **Codex re-authenticated** (user ran `codex login`) — review loop unblocked.
+- 2026-08-29 — **User provided `/My Ideas/`**, a 10-file independent design + research pass, flagged
+  by the user as "not ground truth." Reviewed in full; independently converged with our own research
+  on most major calls (RRF, tiered rejection memory, cutting cross-session personalization) — good
+  cross-validation. Directly sampled 30,000+ `catalog.jsonl` records to resolve its one remaining
+  data-schema open question (confirmed `details` has zero cross-item schema consistency, even within
+  one leaf category). Resolved all 10 of its open questions (Q1-Q10) against actual evaluator source.
+- 2026-08-29 — **Built `implementation/`** — the authoritative architecture/build corpus, superseding
+  `/My Ideas/` (kept as historical input) and filling a real gap (explicit within-session
+  preference-vector ranking boost for Pillar III). Updated `CLAUDE.md` (§1a) so "run Phase N"/"run
+  step N.M" map unambiguously to `implementation/05_BUILD_PLAN.md` with the enforcement loop
+  automatic. Updated `wiki/01_architecture.md` and `wiki/02_design_decisions.md` (DD-002) to point to
+  it. See `wiki/03_design_log.md` for full detail.
 
 ## Open questions / decisions needed from the user
 
-- **Ready for ideation now.** Architecture choices for Pillars I–III are laid out with ranked
-  options in `research/DOS_AND_DONTS.md` — none are decided yet, all await the ideation session.
-- Whether an external LLM API will actually be used (org provides no credits/keys) — affects
-  whether the reranker/orchestrator design should assume an LLM is available or build the
-  no-paid-API cross-encoder path as primary (research leans toward the latter regardless).
-- Confirm the "long-term user profile" interpretation (research/06's recommended reading: a
-  within-session, slow-decaying layer, not cross-session persistence) before Pillar III design
-  locks in — flagged as a genuine ambiguity in the problem statement, not resolvable from the docs
-  alone.
-- `codex login` still needed to unblock the codex-review half of the work-phase loop (see
-  Blockers) — not urgent for research/ideation, but should happen before the first implementation
-  phase so review coverage doesn't have a growing backlog.
+- `implementation/09_SUPERVISOR_QUESTIONS.md` SQ1-SQ5 — LLM provider choice (if any), how far into
+  gated Phase 2+ to push given real time remaining, team/solo division of labor, demo video scope,
+  and whether the 2026-08-28 workshop surfaced anything not yet captured. None of these block
+  starting Phase 0.

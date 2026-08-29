@@ -18,12 +18,13 @@ things stand.
 | Research: evaluation metrics & benchmarks | research agent 8 | done | 2026-08-26 | 2026-08-26 | — |
 | Research: prior art + starter kit online inspection | research agent 9 | done | 2026-08-26 | 2026-08-26 | — |
 | Research synthesis: master Dos & Don'ts + ground-truth simulator mechanics | main session | done | 2026-08-26 | 2026-08-26 | `research/DOS_AND_DONTS.md`, `wiki/09_simulator_mechanics.md` |
-| Ideation with user on Pillars I-III architecture | unassigned | not started | — | — | everything — next up, see `status.md` |
-| Pillar I — Intent routing & hybrid retrieval pipeline | unassigned | not started | — | — | blocked on ideation/decision |
-| Pillar II — Dialog state machine & clarification | unassigned | not started | — | — | everything |
-| Pillar III — Context distillation & adaptive orchestration | unassigned | not started | — | — | everything |
-| Pillar IV — Evaluator integration & metrics tracking | unassigned | not started | — | — | everything |
-| Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | everything |
+| User-provided idea corpus review (`/My Ideas/` — 10 files, independent design+research pass) | main session | done | 2026-08-29 | 2026-08-29 | cross-checked against research + ground truth, merged into `implementation/` |
+| Architecture synthesis: implementation/ corpus (12 documents, all open questions resolved) | main session | done | 2026-08-29 | 2026-08-29 | see `implementation/00_INDEX.md` |
+| Pillar I — Intent routing & hybrid retrieval pipeline | unassigned | not started | — | — | ready — `implementation/05_BUILD_PLAN.md` Phase 0 steps 0.1-0.3, 0.7, 0.10 |
+| Pillar II — Dialog state machine & clarification | unassigned | not started | — | — | ready — Phase 0 steps 0.4-0.6, 0.9 |
+| Pillar III — Context distillation & adaptive orchestration | unassigned | not started | — | — | ready — Phase 0 steps 0.8, Phase 1 step 1.4 |
+| Pillar IV — Evaluator integration & metrics tracking | unassigned | not started | — | — | ready — Phase 0 step 0.11, ongoing per `implementation/08_ABLATION_MATRIX.md` |
+| Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | scheduled as Phase 5, `implementation/05_BUILD_PLAN.md` |
 
 ## Status legend
 `not started` → `in progress` → `blocked` (note why + who/what unblocks it) → `done`.

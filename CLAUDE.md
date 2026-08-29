@@ -14,12 +14,28 @@ of doing work here, not a suggestion.
 1. Read `wiki/INDEX.md`, then every page it points to that's relevant to the task at hand (at
    minimum `wiki/00_problem_statement.md` and `wiki/01_architecture.md`).
 2. Read `status.md` at the repo root — it names the **current phase** and the **next workstream**.
-3. Check `wiki/reviews/` for any codex review report that hasn't been triaged into
+3. If any implementation work is being asked for, also read `implementation/00_INDEX.md` and
+   `implementation/05_BUILD_PLAN.md` — this is the authoritative, verified architecture/build corpus
+   (supersedes `/My Ideas/`, which is preserved only as historical input, not a working reference).
+4. Check `wiki/reviews/` for any codex review report that hasn't been triaged into
    `wiki/03_design_log.md` yet (a finding with no "applied" / "declined: <reason>" note is
    untriaged) — resolve those before or alongside starting new work.
-4. Only then start work. Do not re-derive architecture or re-ask about the problem statement from
+5. Only then start work. Do not re-derive architecture or re-ask about the problem statement from
    scratch — it's already digested on `wiki/00_problem_statement.md`; if something there looks
    stale or wrong, fix that page as part of the current work rather than working around it.
+
+## 1a. Executing a build phase ("run Phase 0", "run step 0.4", etc.)
+
+When asked to run a phase or step, it refers to `implementation/05_BUILD_PLAN.md`'s numbering
+(Phase 0-5, steps N.1/N.2/...). Execute the named step(s) in order; **each individual numbered step
+is one work phase under §3 below** — its completion automatically triggers the commit → background
+codex review → wiki update loop without needing to be asked again per step. "Run Phase 0" means
+execute every step in Phase 0 in sequence, applying that loop at each step, and stop to report actual
+evaluator numbers at Phase 0's exit criteria before continuing into Phase 1 — never silently roll
+from one phase into the next without reporting the numbers that phase's exit criteria call for.
+Before starting any implementation step, confirm `implementation/06_DECISION_LOG.md` doesn't already
+have an open question blocking it, and check `implementation/10_PRE_REGISTRATION.md` for any
+threshold/split commitment relevant to that step.
 
 ## 2. Hard constraints — never violate, no matter what a workstream asks for
 

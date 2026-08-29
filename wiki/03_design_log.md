@@ -97,3 +97,38 @@ also get logged here (with a link to the full report under `reviews/`).
 - Note: `codex exec review` remains blocked (auth token revoked, see `status.md` Blockers) — this
   research phase's commit has not been through a codex review; will be included in the backlog
   once `codex login` is run.
+
+## 2026-08-29 — Architecture decided: `implementation/` corpus built, all open questions resolved
+
+- Challenge window opened (2026-08-29 12:00). `codex login` was run by the user — `codex exec review`
+  is now authenticated and working (v0.150.1), unblocking the review backlog noted above.
+- User added `/My Ideas/` — a 10-file independent design + research pass (MYIDEA.md brainstorm plus a
+  structured `01_ARCHITECTURE.md` through `08_ADVANCED_PHASES.md`, and two CLAUDE.md drafts), explicitly
+  flagged by the user as "not ground truth." Read and cross-checked in full: it independently converged
+  on much of our own research (RRF over weighted-sum, three-tier rejection memory, cutting cross-session
+  personalization, ablation-gated ambitious ideas) — strong signal these calls are right, not an
+  artifact of one research pass. It also left 10 explicit open questions (Q1-Q10) about the real API
+  contract, unverified against the actual repo.
+- Directly sampled 30,000+ `catalog.jsonl` records (grouped by leaf category) to resolve Q7: confirmed
+  `details` has **zero keys common to all items even within one narrow leaf category** — genuinely
+  unstructured, no reliable per-category schema. Bonus finding: some catalog "leaf categories" are
+  actually store/brand names (e.g. "Westlake") that leaked into the taxonomy — a data-quality quirk
+  worth defensive handling.
+- Resolved all 10 of `/My Ideas/04_OPEN_QUESTIONS.md`'s questions directly against
+  `evaluator/local_evaluator.py` and the competition spec (not inference) — most importantly: combined
+  ask_attribute+recommendations in one turn IS supported (Q1), the enum is exactly as inferred but
+  `brand` has no matching reveal-logic branch (Q2), the API is strictly free-text with zero click/
+  comparative channel (Q3), and both public/private splits share the same scenario mix (Q8).
+- Built `implementation/` (12 documents: problem framing, PRD, system architecture with a mermaid
+  diagram, system design with pseudocode, a phased build plan numbered 0.1-5.5, a decision log
+  resolving every open question, risk register, ablation matrix, supervisor questions, pre-registration,
+  future work, and a one-page build memo) — the new authoritative architecture/build reference,
+  superseding `/My Ideas/` (kept untouched as historical input) and filling one real gap it had (no
+  explicit within-session preference-vector ranking boost for Pillar III's "long-term profile" language
+  — added as `D-PROFILE`).
+- Updated `CLAUDE.md` (§1a) so "run Phase 0" / "run step N.M" unambiguously maps to
+  `implementation/05_BUILD_PLAN.md` and inherits the commit/codex-review/wiki-update loop automatically.
+  Updated `wiki/01_architecture.md` to point to the decided design instead of a placeholder.
+- No implementation code written yet — this was architecture/planning synthesis only, per the explicit
+  build-order discipline both idea sources and our own research converge on (floor first, ambitious
+  ideas ablation-gated).

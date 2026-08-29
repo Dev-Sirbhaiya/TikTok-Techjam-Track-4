@@ -30,3 +30,18 @@ reversed, add a new entry that supersedes it and link back. This is the record o
   re-discovery time. Also: codex-review + git-commit + wiki-update per phase needs the scaffolding
   in place from phase 1 to be enforceable at all.
 - Status: accepted
+
+## DD-002 — Solution architecture decided; full log lives in `implementation/06_DECISION_LOG.md`
+- Date: 2026-08-29
+- Phase / workstream: Architecture synthesis (user-provided ideas + 9-file research corpus + verified ground truth)
+- Decision: The full architecture, build plan, and every individual design decision (D1-D17,
+  D-PROFILE, D-PACKAGING, D-LLM-TIER, D-LATENCY) live in `implementation/06_DECISION_LOG.md`, not
+  duplicated here — this page (`01_architecture.md`) stays a condensed summary pointer. Every open
+  question from the user's own `/My Ideas/04_OPEN_QUESTIONS.md` was resolved against the actual
+  evaluator/starter-agent source code, not inference.
+- Alternatives considered: Duplicate full decision detail into this wiki page — rejected as
+  maintenance burden with no benefit; one authoritative location per `CLAUDE.md`'s own rule.
+- Why: `implementation/` is purpose-built as the detailed planning corpus (PRD, system design,
+  build plan with numbered phases, ablation matrix, risk register, pre-registration); `wiki/` stays
+  the living, kept-current summary + progress record per its original design.
+- Status: accepted

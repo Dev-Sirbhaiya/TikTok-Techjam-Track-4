@@ -1,0 +1,354 @@
+# 04 — System Design
+
+Concrete-enough-to-implement-from specs for every Phase 0 module. Function signatures are working
+targets, not immutable contracts. Supersedes `/My Ideas/05_COMPONENT_SPECS.md` — same overall shape,
+corrected and made concrete with verified formulas/models from `research/*` and ground truth.
+
+## Repository layout (resolves the starter/src/submission packaging problem — see `06_DECISION_LOG.md` D-PACKAGING)
+
+```text
+v1/
+├── src/
+│   └── copilot/                     # the REAL implementation lives here
+│       ├── __init__.py
+│       ├── state.py                 # DialogState
+│       ├── nlu.py                   # slot extraction, rule+embedding, optional LLM arbiter
+│       ├── intent_router.py         # Buying vs Browsing
+│       ├── retrieval.py             # BM25 + dense + metadata, RRF fusion
+│       ├── rejection_memory.py
+│       ├── preference.py            # EMA preference vectors (FR-7)
+│       ├── overgenerality.py        # entropy gate + question selector
+│       ├── ranker.py                # cross-encoder + optional LLM rerank
+│       ├── orchestrator.py          # small state machine (FR-8)
+│       ├── turn_policy.py
+│       ├── agent.py                 # the actual `Agent` class
+│       ├── logging_.py              # per-turn rationale logger
+│       └── phase2/                  # gated modules, empty until their ablation wins
+│           ├── multi_interest.py
+│           ├── action_policy.py
+│           └── comparative.py
+├── external/techjam-conversational-search/
+│   └── starter/agent.py             # thin re-export: `from copilot.agent import Agent`
+├── submission/                      # generated at packaging time (Phase 5), mirrors src/copilot
+├── tools/
+│   ├── run_eval.py                  # wraps the organizer's evaluator, logs to wiki/08_evaluation_log.md format
+│   └── offline_tune.py              # Phase 3, gated
+└── tests/
+```
+
+`starter/agent.py` becomes a two-line re-export so `python -m evaluator.local_evaluator` keeps working
+unmodified (hardcoded import path, confirmed — see `wiki/09_simulator_mechanics.md`):
+```python
+# external/techjam-conversational-search/starter/agent.py
+from copilot.agent import Agent  # noqa: F401
+```
+Phase 5 packaging copies `src/copilot/` into `submission/src/` and writes a top-level `submission/agent.py`
+re-export matching `docs/submission_rules.md`'s recommended layout — one implementation, two thin shims.
+
+## `state.py` — `DialogState`
+
+```python
+from dataclasses import dataclass, field
+import numpy as np
+
+@dataclass
+class DialogState:
+    slots: dict = field(default_factory=dict)                 # open-vocabulary internally (see D10)
+    rejected_hard: dict = field(default_factory=dict)          # {"color": ["green"]}
+    rejected_soft: dict = field(default_factory=dict)          # {"style": ["floral"]}
+    rejected_soft_confidence: dict = field(default_factory=dict)  # 0.0-1.0 per key
+    pref_vector_pos: np.ndarray | None = None                  # EMA positive affinity, dim = embed_dim
+    pref_vector_neg: np.ndarray | None = None                  # EMA negative affinity
+    buying_intent_score: float = 0.5
+    turn_count: int = 0
+    candidate_pool: list = field(default_factory=list)         # ranked parent_asin list
+    pool_entropy: float = 1.0
+    override_history: list = field(default_factory=list)       # [{"turn": 4, "cleared": [...]}]
+    last_asked_attribute: str | None = None
+    facet_utility_history: dict = field(default_factory=dict)  # Phase 2 bandit input only
+
+    @property
+    def turns_remaining(self) -> int:
+        return 10 - self.turn_count
+```
+
+## `nlu.py` — slot extraction (NO hard LLM dependency — NFR-2)
+
+**Primary path (always available, zero API dependency):** gazetteer + regex extraction, built once at
+load time from the frozen catalog (brand/color/material/size vocabularies scanned from `details`/
+`categories`/`title`/`features`) plus a price-token regex (`$`, `under`, `<=`, digits). Category is
+free — the simulator discloses it turn 1 in every scenario (verified — see `wiki/09`), so category
+extraction from `user_message` is a bonus signal, not the only source.
+
+**Secondary path (only if an LLM API key is configured via env var):** a schema-constrained single
+extraction call per turn emitting explicit per-slot operations (`ADD`/`KEEP`/`UPDATE`/`CLEAR` — the
+SOM-DST taxonomy via prompting, per `research/04`), used to catch phrasing the gazetteer misses.
+**The gazetteer/regex path must independently produce a usable (if less complete) result even if this
+step is entirely disabled or fails** — never let extraction have a single point of failure.
+
+```python
+def extract_slot_updates(user_message: str, state: DialogState, catalog_gazetteer, llm_client=None) -> dict:
+    updates = gazetteer_extract(user_message, catalog_gazetteer)   # regex/keyword, always runs
+    if llm_client is not None:
+        try:
+            llm_updates = llm_extract(user_message, state, llm_client)  # schema-constrained, 1 call
+            updates = merge_extractions(updates, llm_updates, prefer="llm_on_conflict")
+        except Exception:
+            pass  # gazetteer result alone is the safe fallback -- never raise from here
+    return updates  # {"slot_updates": {...}, "rejection_signal": {...}|None}
+```
+
+## `intent_router.py` — Buying vs. Browsing
+
+Hybrid per `research/01`'s top recommendation: gazetteer/regex hard-constraint match ⇒ Buying with
+those exact slots locked; else embedding-similarity vote against a small hand-authored exemplar set
+for each track; LLM arbiter only when both signals disagree or are low-confidence, and only if a
+client is configured.
+
+```python
+def route_intent(user_message: str, state: DialogState, gazetteer, exemplar_embeddings, llm_client=None) -> str:
+    hard_slots = gazetteer_hard_match(user_message, gazetteer)          # brand/size/price/exact category
+    if hard_slots:
+        return "buying"
+    sim = embedding_route_vote(user_message, exemplar_embeddings)       # cosine vs buying/browsing centroids
+    if sim.confidence < LOW_CONFIDENCE_THRESHOLD and llm_client is not None:
+        return llm_arbitrate_intent(user_message, state, llm_client)
+    return sim.label
+```
+
+Never freeze the track for the whole session — re-evaluate lightly every turn from accumulated state
+(`research/01` Don't).
+
+## `retrieval.py` — hybrid retrieval + RRF (unchanged from `/My Ideas/`, confirmed correct by research)
+
+```python
+def retrieve_candidates(query_text: str, state: DialogState, catalog_index, k_pool: int = 60) -> list[dict]:
+    bm25_ranked = catalog_index.bm25_search(query_text, top_n=150)
+    dense_ranked = catalog_index.dense_search(query_text, top_n=150)
+    hard_filtered_ids = catalog_index.apply_hard_filters(state.slots)   # dict inverted index, pre-filter
+    fused = reciprocal_rank_fusion(
+        [r for r in (bm25_ranked, dense_ranked)],
+        restrict_to=hard_filtered_ids if state.buying_intent_score > 0.6 else None,
+    )
+    return catalog_index.hydrate(fused[:k_pool])
+
+def reciprocal_rank_fusion(ranked_lists: list[list[str]], k: int = 60, restrict_to: set | None = None) -> list[str]:
+    scores: dict[str, float] = {}
+    for ranked in ranked_lists:
+        for rank, doc_id in enumerate(ranked):
+            if restrict_to is not None and doc_id not in restrict_to:
+                continue
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank + 1)
+    return sorted(scores, key=scores.get, reverse=True)
+```
+
+**Stack** (from `research/02`, ranked recommendation): `bm25s` (or reuse the starter's SQLite FTS5 —
+stdlib, zero extra dependency) for the sparse leg; `BAAI/bge-small-en-v1.5` (384-dim, ~33M params) as
+primary dense encoder, `all-MiniLM-L6-v2` as a fallback if inference budget is tighter than expected;
+encode the 50K catalog once offline into a cached float32 matrix (~75MB); per-turn cost is one query
+encode + one matmul, sub-20ms. **Do not** use FAISS/hnswlib "for scale" — unnecessary at 50K items;
+plain NumPy brute-force is already fast enough (`research/02` Don't).
+
+## `rejection_memory.py` — three-tier confidence filter (from `/My Ideas/`, confirmed sound design)
+
+```python
+def classify_rejection(signal_type: str) -> tuple[str, float]:
+    return {
+        "explicit":    ("hard", 1.0),
+        "comparative": ("soft", 0.5),
+        "vague":       ("soft", 0.5),
+        "implicit":    ("soft", 0.2),   # generic negative on last-shown item ONLY -- never infer an attribute
+    }[signal_type]
+
+def apply_rejection_filter(candidates: list[dict], state: DialogState) -> list[dict]:
+    out = []
+    for c in candidates:
+        if _matches_hard_rejection(c, state.rejected_hard):
+            continue                                          # dropped entirely
+        c["_rejection_penalty"] = _soft_rejection_penalty(c, state.rejected_soft, state.rejected_soft_confidence)
+        out.append(c)
+    return out
+```
+
+## `preference.py` — EMA preference vectors (FR-7, new vs. `/My Ideas/` — fills a real gap)
+
+Addresses Pillar III's "Personalized Context Distillation" / "long-term user profile" directly, per
+`research/06`'s recommended interpretation (within-session, slower-decaying layer — see
+`06_DECISION_LOG.md` D-PROFILE). Cheap, weight-free, no training.
+
+```python
+def update_preference_vectors(state: DialogState, turn_embedding: np.ndarray, signal: str, alpha_pos=0.35, alpha_neg=0.35):
+    """signal in {"positive", "negative"}. Two independently-decaying vectors, Airbnb-style."""
+    if signal == "positive":
+        state.pref_vector_pos = _ema(state.pref_vector_pos, turn_embedding, alpha_pos)
+    elif signal == "negative":
+        state.pref_vector_neg = _ema(state.pref_vector_neg, turn_embedding, alpha_neg)
+
+def _ema(prev: np.ndarray | None, new: np.ndarray, alpha: float) -> np.ndarray:
+    if prev is None:
+        return new / (np.linalg.norm(new) + 1e-9)
+    v = alpha * new + (1 - alpha) * prev
+    return v / (np.linalg.norm(v) + 1e-9)
+
+def preference_boost(product_embedding: np.ndarray, state: DialogState, lam=0.15, mu=0.10) -> float:
+    """Additive ranking-time boost -- NOT a retrieval filter. See D-PROFILE for why this must
+    affect ranking, not just candidate generation, to actually move MRR/HitRate@K turn-over-turn."""
+    boost = 0.0
+    if state.pref_vector_pos is not None:
+        boost += lam * float(np.dot(product_embedding, state.pref_vector_pos))
+    if state.pref_vector_neg is not None:
+        boost -= mu * float(np.dot(product_embedding, state.pref_vector_neg))
+    return boost
+```
+
+## `overgenerality.py` — entropy gate + question selector (verified formulas from `research/05`)
+
+```python
+import math
+
+def score_entropy(top_k_scores: list[float]) -> float:
+    """H_k(q) = -sum(P_i log P_i) / log(k), P_i = softmax-normalized score. In [0,1]. From
+    arXiv:2509.06185 -- the closest direct prior art for this exact mechanism."""
+    total = sum(top_k_scores) or 1e-9
+    probs = [s / total for s in top_k_scores]
+    k = len(probs)
+    if k <= 1:
+        return 0.0
+    h = -sum(p * math.log(p + 1e-12) for p in probs)
+    return h / math.log(k)
+
+def should_clarify(entropy: float, pool_size: int, turns_remaining: int,
+                    low=0.3, high=0.8, min_pool_to_bother=4, no_ask_after_turn=7) -> bool:
+    if turns_remaining <= (10 - no_ask_after_turn):     # hard turn-index ceiling
+        return False
+    if pool_size < min_pool_to_bother:                  # pool-size floor
+        return False
+    return entropy >= low                               # calibrate low/high against dev sessions
+
+def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str]) -> str | None:
+    """CIKM'13 Probabilistic Entropy method: pick the facet whose value distribution over the
+    LIVE candidate pool has maximum entropy -- maximizes expected pool-size reduction per question.
+    `attribute_enum` MUST be the 11-value confirmed enum (see 02_TECHNICAL_PRD.md) -- 'brand' is
+    included in the enum but structurally unproductive (no matching branch in the simulator's
+    reveal logic), so it should be deprioritized/excluded from candidate facets by default."""
+    best_attr, best_h = None, -1.0
+    for attr in attribute_enum:
+        if attr in filled_slots or attr in ("other", "brand"):
+            continue
+        h = _facet_value_entropy(candidates, attr)
+        if h > best_h:
+            best_attr, best_h = attr, h
+    return best_attr
+
+def _facet_value_entropy(candidates: list[dict], attribute: str) -> float:
+    from collections import Counter
+    values = [c["attributes"].get(attribute) for c in candidates if c["attributes"].get(attribute)]
+    if not values:
+        return 0.0
+    counts = Counter(values)
+    total = len(values)
+    return -sum((n / total) * math.log((n / total) + 1e-12) for n in counts.values())
+```
+
+## `ranker.py` — cross-encoder default + optional LLM booster (research-corrected vs. `/My Ideas/`)
+
+```python
+def rerank(shortlist: list[dict], state: DialogState, cross_encoder, llm_client=None, margin_skip=0.35) -> list[dict]:
+    if len(shortlist) <= 3:
+        return shortlist  # nothing meaningful to reorder
+    scored = cross_encoder.score(query=_state_to_query_text(state), candidates=shortlist)  # e.g. ms-marco-MiniLM-L-6-v2
+    ranked = sorted(zip(shortlist, scored), key=lambda t: -t[1])
+    if ranked[0][1] - ranked[1][1] >= margin_skip:
+        return [c for c, _ in ranked]  # confidence-based early exit -- skip the LLM call
+    if llm_client is not None:
+        top_n = [c for c, _ in ranked[:12]]  # single-pass listwise, NO sliding window (research/03)
+        try:
+            return llm_listwise_rerank(top_n, state, llm_client) + [c for c, _ in ranked[12:]]
+        except Exception:
+            pass
+    return [c for c, _ in ranked]
+```
+
+Default cross-encoder: `cross-encoder/ms-marco-MiniLM-L-6-v2` (CPU-friendly, no API key, sub-200ms on a
+shortlist). This is the **guaranteed** "LLM Semantic Ranking" stage per NFR-2 — the LLM branch is an
+optional booster, never the only path. See `research/03` for full benchmark evidence that this is not
+a compromise; calibrated cross-encoders match or beat general LLM rerankers on this exact class of task.
+
+## `turn_policy.py` — ask / commit / both (confirmed: "both" is valid — see `02_TECHNICAL_PRD.md`)
+
+```python
+def decide_turn_action(state: DialogState, top_score: float, entropy: float, pool_size: int,
+                        base_threshold=0.7, decay_rate=0.05) -> str:
+    turns_left = state.turns_remaining
+    threshold = base_threshold - decay_rate * (10 - turns_left)
+    if turns_left <= 1:
+        return "commit"                              # NFR-1: structurally force a decision
+    if top_score >= threshold and not should_clarify(entropy, pool_size, turns_left):
+        return "commit"
+    if pool_size <= 10:
+        return "both"                                # confident enough to show candidates AND ask
+    return "ask"
+```
+
+## `orchestrator.py` — the adaptive layer (FR-8, small explicit state machine — `research/07`)
+
+States: `intent-parse → retrieve → (confidence gate) → [rerank | skip-rerank] → overgenerality-check →
+[ask | commit | both] → respond → log`. Every transition is a plain `if/else` on signals already
+computed above (candidate count, score margin, entropy, turns remaining) — **no LLM call decides
+control flow**; an LLM may only be used inside a state (slot extraction, listwise rerank), never to
+choose which state runs next. Log the triggering signal at every branch (`logging_.py`) — this is what
+makes "Adaptive Orchestration" demonstrable to judges rather than an unverifiable claim.
+
+## `agent.py` — the orchestrator loop
+
+```python
+def respond(session_id: str, user_message: str, turn: int, top_k: int, state_store: dict,
+            catalog_index, gazetteer, cross_encoder, exemplar_embeddings, llm_client=None) -> dict:
+    state = state_store.setdefault(session_id, DialogState())
+    state.turn_count = turn - 1  # evaluator passes 1-indexed turn; turns_remaining derives from this
+
+    nlu_out = extract_slot_updates(user_message, state, gazetteer, llm_client)
+    apply_slot_updates(state, nlu_out)                                   # includes override detection
+    track = route_intent(user_message, state, gazetteer, exemplar_embeddings, llm_client)
+    state.buying_intent_score = 0.8 if track == "buying" else 0.3
+
+    candidates = retrieve_candidates(user_message, state, catalog_index)
+    candidates = apply_rejection_filter(candidates, state)
+    for c in candidates:
+        c["_score"] += preference_boost(c["_embedding"], state)
+    entropy = score_entropy([c["_score"] for c in candidates[:10]])
+    ranked = rerank(candidates[:50], state, cross_encoder, llm_client)
+
+    state.candidate_pool = [c["parent_asin"] for c in ranked]
+    state.pool_entropy = entropy
+    action = decide_turn_action(state, ranked[0]["_score"] if ranked else 0.0, entropy, len(ranked))
+
+    response = {"message": "", "ask_attribute": None, "recommendations": []}
+    if action in ("ask", "both"):
+        attr = select_best_question(ranked, set(state.slots.keys()), ATTRIBUTE_ENUM)
+        response["ask_attribute"] = attr
+        response["message"] = phrase_question(attr, state)
+        state.last_asked_attribute = attr
+    if action in ("commit", "both"):
+        response["recommendations"] = [c["parent_asin"] for c in ranked[:top_k]]
+        if action == "commit":
+            response["message"] = phrase_recommendation(ranked[:top_k], state)
+
+    log_turn_rationale(session_id, turn, state, action, ranked[:3])
+    state.turn_count = turn
+    state_store[session_id] = state
+    return response
+```
+
+## Tech stack
+
+| Component | Choice | Why |
+|---|---|---|
+| Language | Python 3.10+ | Matches starter kit / evaluator |
+| Sparse retrieval | `bm25s`, or reuse starter's stdlib SQLite FTS5 | Zero/near-zero dependency, sub-ms at 50K |
+| Dense retrieval | `sentence-transformers` + `BAAI/bge-small-en-v1.5` (fallback `all-MiniLM-L6-v2`) | Best small-model quality/latency tradeoff (`research/02`) |
+| Vector store | Plain NumPy matrix, in-memory | 50K items is a small-data problem; no ANN library needed |
+| Reranking (guaranteed) | `sentence-transformers` `CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")` | No API key, CPU-fast, benchmark-competitive (`research/03`) |
+| Reranking (optional booster) | Any LLM API or local model, env-var configured | Never required; NFR-2 |
+| Dialog state | Plain dataclass, in-memory dict keyed by `session_id` | No persistence needed, sessions isolated |
+| Evaluation | Organizer's `evaluator/local_evaluator.py`, unmodified | Trustworthy, matches final scoring exactly |
