@@ -300,16 +300,22 @@ priorities, fusion weights) rather than hand-guessed values. Validate against th
 the training split (that comparison is meaningless — see `08_ABLATION_MATRIX.md` Ablation 3).
 
 ### 3.2 — Comparative feedback (text-routed — CONFIRMED no click/selection channel exists)
-Parse comparative language ("closer to the second one, but less flashy") through the same NLU/state
-path as any other turn. Apply a Rocchio-style update, **bounded and positive-heavy** per the negative
-literature on query drift (`research/06` cross-ref; `/My Ideas/` D9): high weight on original signal,
-small positive-feedback weight, near-zero/heavily-damped negative term, cap feedback at k≤5.
+**CUT at implementation time (2026-08-30) — confirmed structurally impossible, not built.** Direct
+inspection of the organizer's actual `evaluator/local_evaluator.py` at implementation time found
+`customer_reply()` never receives the agent's recommendation list as input, and the complete,
+exhaustive set of simulator-generated turns (3 `initial_message()` templates + 4 `customer_reply()`
+templates, across the 4 confirmed scenario types) contains no comparative-language generation path
+at all. A comparative-feedback parser would be dead code that can never fire against this evaluator.
+Full reasoning: `implementation/06_DECISION_LOG.md` D9. The Rocchio-update engineering caution
+(bounded, positive-heavy, k≤5) remains documented for the writeup even though nothing was built.
 
 **Phase 3 exit codex review**: `codex exec review --base <SHA at Phase 2's phase-closeout commit —
-Phase 2.5 has no separate closeout, see its section above> --title "Phase 3 exit: offline tuning +
-comparative feedback"`, then the phase-closeout sequence above — pay particular attention to whether 3.1's offline tuning loop leaked validation-split data
-into training (a specific, checkable failure mode per `10_PRE_REGISTRATION.md`); highlight it
-explicitly in the wiki if found, don't just note "passed review."
+Phase 2.5 has no separate closeout, see its section above> --title "Phase 3 exit: offline tuning
+(comparative feedback confirmed out of scope)"`, then the phase-closeout sequence above — pay
+particular attention to whether 3.1's offline tuning loop leaked validation-split data into training
+(a specific, checkable failure mode per `10_PRE_REGISTRATION.md`), and independently sanity-check the
+D9 "structurally impossible" finding against the evaluator source rather than taking it on faith;
+highlight either explicitly in the wiki if found, don't just note "passed review."
 
 ---
 

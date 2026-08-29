@@ -30,7 +30,7 @@ things stand.
 | Pillar IV — Evaluator integration & metrics tracking | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | `tools/run_eval.py` is the standing "one command to run" |
 | **Phase 1 implementation + closeout** (calibration split, ratio-gated facet selection, named orchestrator, 1 codex review fully triaged) | main session | **done** | 2026-08-29 | 2026-08-29 | TechnicalScore 0.4087 (+24.5% vs Phase 0) — see `wiki/08_evaluation_log.md`; buying-track regression from Phase 0 fully recovered |
 | **Phase 2 implementation + closeout** (3 gated ablations; codex review's 3 findings fixed; then a Phase 3.1-discovered reproducibility bug forced re-ablation of all 3 — VoI reversed kept→cut, all three now cut) | main session | **done, corrected** | 2026-08-30 | 2026-08-30 | Corrected TechnicalScore 0.40927 (supersedes buggy-measurement 0.4111) — see `wiki/08_evaluation_log.md` and `wiki/03_design_log.md`'s Phase 3.1 entry |
-| Phase 3 — offline tuning + comparative feedback | main session | in progress | 2026-08-30 | — | per user's continue-iterating directive |
+| Phase 3 — offline tuning (3.1) + comparative feedback (3.2) | main session | **done** | 2026-08-30 | 2026-08-30 | 3.1: defaults confirmed robust via systematic sweep, unchanged. 3.2: confirmed structurally impossible against the actual simulator, cut (not built) — see `implementation/06_DECISION_LOG.md` D9. Scored `Agent` behavior unchanged from Phase 2's corrected exit (TechnicalScore 0.40927). |
 | Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | scheduled as Phase 5, `implementation/05_BUILD_PLAN.md` |
 
 ## Status legend

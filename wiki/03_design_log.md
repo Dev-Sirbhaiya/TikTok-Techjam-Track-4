@@ -385,7 +385,39 @@ matched the hand-set Phase 0/1.3 defaults byte-for-byte (e.g. `CLARIFY_BASE_LOW`
 on validation). This is a real, systematically-verified finding, not an inconclusive search: the
 existing defaults sit in a wide, robust operating region with comfortable margin before any cliff,
 and no candidate beat them on held-out data — per Ablation 3's own decision rule, **the defaults are
-kept unchanged**. Phase 3.1 is closed out on this basis; step 3.2 (comparative feedback) is next.
+kept unchanged**. Phase 3.1 is closed out on this basis.
+
+## 2026-08-30 (cont.) — Phase 3.2 (comparative feedback): confirmed structurally impossible, cut
+
+Before implementing 3.2's Rocchio-style comparative-feedback parser, checked its premise directly
+against the organizer's actual `evaluator/local_evaluator.py` rather than assuming the build plan's
+framing still held. Result: it doesn't. `customer_reply(sample, ask_attribute, disclosed,
+boundary_used)` — the complete function that generates every non-opening simulator turn — never
+receives the agent's recommendation list as an argument at all, so the simulator has no way to
+reference "the second one" or critique a specific shown item, comparatively or otherwise, even in
+principle. Read both `initial_message()` and `customer_reply()` in full: the exhaustive set of
+possible simulator turns is 3 opening templates (buying hard-constraint, intent_override pivot,
+browsing "still exploring") and 4 reply templates (boundary non-answer, generic nudge when no
+attribute was asked, attribute reveal, attribute-exhausted) across the 4 confirmed scenario types
+(`boundary`/`browsing`/`buying`/`intent_override`, verified via `behavior_for()`). None of these
+paths generates comparative language.
+
+Building a parser for input the simulator can never produce would be dead code — exactly the
+unearned-complexity class `CLAUDE.md` rule 5 prohibits, extended here from "the competition rules
+make it impossible" to "this specific evaluator's actual code makes it impossible." **Cut, not
+deferred** — full reasoning in `implementation/06_DECISION_LOG.md`'s revised D9 entry and
+`implementation/05_BUILD_PLAN.md`'s step 3.2. The underlying engineering caution (bounded,
+positive-heavy Rocchio update, k≤5, from the negative PRF/query-drift literature `/My Ideas/` D9
+cited) remains correct and documented for the writeup even though nothing was built against it.
+
+**Phase 3 is closed out on this basis**: 3.1 shipped (defaults confirmed robust, unchanged), 3.2
+confirmed impossible and cut. No change to the scored `Agent`'s runtime behavior occurred during
+Phase 3.1/3.2's own work (only tooling/`strategy_config.py` comments and doc updates) — the
+corrected Phase 2 exit number (`TechnicalScore 0.40927`, commit `7be9ba7`) stands unchanged as
+Phase 3's exit number too; re-running the full 200-session evaluator would be redundant, not more
+correct, since nothing in the actual code path changed. Proceeding to Phase 3's exit codex review
+(scoped to the full diff since Phase 2's `4aeaaff` closeout, per the build plan's own instruction),
+then Phase 3.5 per the standing `/goal`.
 
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 

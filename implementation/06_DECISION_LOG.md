@@ -155,10 +155,27 @@ critique, our research) all converging on the same rejection. Strong material fo
 "considered and rejected, here's why" section.
 
 ### D9 — Comparative critiquing ("Tinder-style" feedback)
-**Status: KEPT — REFRAMED (Phase 3), API ambiguity now RESOLVED (see Q3 above): text-routed is the
-ONLY option, not a fallback among options.** The Rocchio-update caution (bounded, positive-heavy, k≤5,
-gated behind a validation check) is preserved and independently consistent with `research/06`'s
-personalization literature on suppressing harmful pseudo-relevance-feedback updates.
+**Status: CUT at implementation time (Phase 3.2, 2026-08-30) — confirmed structurally impossible
+against the actual evaluator, not merely deprioritized.** Q3 above already ruled out a *structured*
+click/swipe signal; at Phase 3.2 implementation time, direct inspection of the organizer's actual
+`evaluator/local_evaluator.py` ruled out the *free-text* fallback too. The complete, exhaustive
+space of simulator-generated turns is: `initial_message()` (3 fixed templates: buying hard-constraint,
+intent_override pivot, browsing "still exploring") and `customer_reply()` (4 fixed templates: boundary
+non-answer, generic nudge on no-attribute-asked, attribute reveal, attribute-exhausted). Critically,
+`customer_reply()`'s signature (`sample, ask_attribute, disclosed, boundary_used`) **never receives
+the agent's recommendation list at all** — the simulator has no way to reference "the second one" or
+critique a specific shown item, comparatively or otherwise, even in principle. There are only 4
+scenario types (`boundary`/`browsing`/`buying`/`intent_override`, confirmed via `behavior_for()`), none
+of which route through any comparative-language generation path. Building a comparative-feedback
+parser would be dead code that can never fire against this evaluator — exactly the class of
+unearned complexity `CLAUDE.md` rule 5 prohibits ("don't add abstractions... for scenarios the
+competition rules make impossible"), here extended to scenarios *this specific simulator's actual
+code* makes impossible. The Rocchio-update engineering caution (bounded, positive-heavy, k≤5) and the
+underlying research citation remain correct and worth preserving for the writeup's "considered and
+rejected, here's exactly why" section, but nothing is built. If a future session ever revisits this
+(e.g. against a different/updated evaluator), re-verify this finding against that evaluator's actual
+source before assuming it still holds — this conclusion is evaluator-specific, not a general claim
+about the problem domain.
 
 ### D11 — Within-session adaptive action policy (contextual bandit)
 **Status: KEPT — GATED (Phase 2), unchanged.** The cold-start risk (only ~3-6 real clarification
