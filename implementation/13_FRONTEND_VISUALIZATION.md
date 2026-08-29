@@ -42,7 +42,15 @@ critical path).
 | Turn timeline | 10-slot stepper; each turn marked by action taken (ask/commit/both) and whether it was the hit turn | Per-turn `agent.py` output log |
 | Over-generality gate | A radial gauge of the current pool entropy against the calibrated ask/commit thresholds | `overgenerality.py`'s `score_entropy()` output |
 | Dialog state | Filled slots (pills), hard-rejected values (struck through), soft-rejected values (dimmed, confidence shown), and any override event | `DialogState` snapshot per turn |
-| Preference vectors | Small sparklines of positive/negative affinity magnitude across turns | `preference.py`'s EMA vectors, projected to a scalar (norm or similarity-to-session-mean) per turn |
+| Preference vectors | Small sparklines of turn-over-turn **stability** (cosine similarity between consecutive turns' vectors) — rising toward 1.0 as preferences converge | `preference.py`'s EMA vectors; **not** their norm (see correction below) |
+
+**CORRECTED per codex review round 2**: the original design plotted "affinity magnitude" as the
+sparkline value, but `preference.py`'s `_ema()` re-normalizes the stored vector to unit length on
+every update — so its norm is always ≈1 regardless of turn, and a "magnitude" sparkline would be a
+flat, meaningless line. Fixed to plot **cosine similarity between the current turn's preference vector
+and the previous turn's** instead — this actually changes over the session (low early, while
+preferences are still forming; converging toward 1.0 as the signal stabilizes) and is a genuinely
+informative turn-over-turn quantity.
 | Retrieval funnel | Candidate counts shrinking through BM25 → dense → RRF fusion → rejection filter → reranked top-10 | Per-turn candidate-count log at each pipeline stage |
 
 ## Why 3D, and why PCA (not UMAP/t-SNE) for the live view

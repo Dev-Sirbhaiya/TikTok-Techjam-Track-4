@@ -23,10 +23,11 @@ things stand.
 | Two-tier codex review wiring (per-step + per-phase) in build plan + CLAUDE.md | main session | done | 2026-08-29 | 2026-08-29 | — |
 | Frontend visualization design + published prototype ("Embedding Explorer") | main session | done | 2026-08-29 | 2026-08-29 | `implementation/13_FRONTEND_VISUALIZATION.md`; real Three.js build is optional/time-permitting, not on critical path |
 | Architecture-synthesis codex review + full triage (7 findings, all fixed) | main session | done | 2026-08-29 | 2026-08-29 | see `wiki/reviews/architecture-synthesis-2026-08-29.md` |
-| Pillar I — Intent routing & hybrid retrieval pipeline | unassigned | not started | — | — | ready — `implementation/05_BUILD_PLAN.md` Phase 0 steps 0.1-0.3, 0.7, 0.10 |
-| Pillar II — Dialog state machine & clarification | unassigned | not started | — | — | ready — Phase 0 steps 0.4-0.6, 0.9 |
-| Pillar III — Context distillation & adaptive orchestration | unassigned | not started | — | — | ready — Phase 0 steps 0.8, Phase 1 step 1.4 |
-| Pillar IV — Evaluator integration & metrics tracking | unassigned | not started | — | — | ready — Phase 0 step 0.11, ongoing per `implementation/08_ABLATION_MATRIX.md` |
+| Phase 0 implementation (src/copilot/: state, catalog, nlu, intent_router, retrieval, rejection_memory, preference, overgenerality, ranker, turn_policy, agent, logging, phrasing, tools/install_shim.py, tools/run_eval.py) | main session | in progress | 2026-08-29 | — | full evaluator run against 200 dev sessions + phase-level codex review + closeout |
+| Pillar I — Intent routing & hybrid retrieval pipeline | main session | in progress | 2026-08-29 | — | code written (`intent_router.py`, `retrieval.py`, `catalog.py`), pending full-loop evaluator validation |
+| Pillar II — Dialog state machine & clarification | main session | in progress | 2026-08-29 | — | code written (`state.py`, `nlu.py`, `rejection_memory.py`, `overgenerality.py`), 19 unit tests passing |
+| Pillar III — Context distillation & adaptive orchestration | main session | in progress | 2026-08-29 | — | code written (`preference.py`); orchestrator kept as inline decision functions for Phase 0, not a separate state-machine module yet |
+| Pillar IV — Evaluator integration & metrics tracking | main session | in progress | 2026-08-29 | — | `tools/install_shim.py` + `tools/run_eval.py` written and shim-import verified; awaiting full 200-session run |
 | Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | scheduled as Phase 5, `implementation/05_BUILD_PLAN.md` |
 
 ## Status legend

@@ -250,3 +250,51 @@ two-tier review protocol (`05_BUILD_PLAN.md` intro) — none silently fixed with
 **All 7 findings fixed, none declined.** This is exactly the kind of integration bug the phase-level
 review tier (added the same day, per user request) is meant to catch before code exists to make them
 expensive — all 7 were caught at the design-doc stage, not after implementation.
+
+## Codex review findings — round 2, reviewing the round-1 fixes (2026-08-29)
+
+Second review, against the commit that applied round 1's fixes (`e5c9eab`). Full report:
+`wiki/reviews/two-tier-and-viz-2026-08-29.raw.txt`. Second-order issues in the fixes themselves — a
+healthy sign the review loop keeps working on its own output, not just first drafts.
+
+| # | Severity | Finding | Fixed in | Resolution |
+|---|---|---|---|---|
+| 8 | P1 | Round 1's softmax fix used unit temperature over raw RRF scores, which differ only in the thousandths — entropy saturates near 1.0 regardless of actual confidence, defeating the 0.3/0.8 thresholds | `04_SYSTEM_DESIGN.md` `score_entropy()` | **Fixed**: added a `temperature` parameter (scores divided by it before softmax), to be calibrated alongside `low`/`high` in Phase 1.3 |
+| 9 | P1 | Round 1's offline-model fix treated "bundle weights" and "prefetch into local cache" as equally valid options — prefetch can't populate a clean scorer's cache if network is disabled before setup runs at all | `05_BUILD_PLAN.md` Phase 5.2/5.3 | **Fixed**: bundling is now required, not optional; prefetch demoted to a dev-only convenience; reproducibility check now tests the submitted bundle itself from a location with no pre-existing cache |
+| 10 | P1 | `tools/install_shim.py` was described in `04_SYSTEM_DESIGN.md`'s prose but not required by step 0.1's actual checklist — an executor could reach 0.3 without ever running it | `05_BUILD_PLAN.md` step 0.1 | **Fixed**: shim creation + invocation + an import/evaluator acceptance check added directly to 0.1's checklist |
+| 11 | P2 | Phase 1.3's validation-split fix reports the winning config's score only on the 40-session split, making it incomparable to Phase 0's full-200-session exit number | `05_BUILD_PLAN.md` step 1.3 | **Fixed**: added a confirmatory full-200 run of the locked configuration as the actual number compared against Phase 0's exit criteria |
+| 12 | P2 | Phase-closeout sequence starts immediately upon reaching a phase's last step, with no check that every step's asynchronously-launched review has actually returned | `05_BUILD_PLAN.md` closeout sequence | **Fixed**: added an explicit barrier step (0) confirming all step-level reviews in the phase are triaged before the phase-level review runs |
+| 13 | P2 | Phase 2.5's own text says its work is bundled into Phase 2's commits (no separate builds), but it had its own "Phase 2.5 exit review" diffed against Phase 2's closeout commit — necessarily an empty diff | `05_BUILD_PLAN.md` Phase 2.5 + Phase 3's review base | **Fixed**: Phase 2.5 has no separate phase-closeout; its changes are covered by Phase 2's own review; Phase 3's review base corrected to point at Phase 2's closeout commit |
+| 14 | P3 | Frontend viz spec's preference-vector sparkline was described as plotting affinity "magnitude" — but `preference.py`'s EMA re-normalizes to unit length every update, so magnitude is always ≈1 and conveys nothing | `13_FRONTEND_VISUALIZATION.md` | **Fixed**: sparkline now plots turn-over-turn cosine similarity (vector stability) instead — an actually-informative quantity |
+
+**All 7 round-2 findings fixed, none declined.**
+
+## D-EMBED-CACHE (new, self-caught during implementation, 2026-08-29) — Ship precomputed catalog embeddings as a submission asset, not a runtime cost
+
+**Status: KEPT (Phase 0).** While implementing `catalog.py`'s dense-retrieval leg, encoding all
+50,000 catalog items through `bge-small-en-v1.5` showed wildly inconsistent throughput in this dev
+sandbox: a 500-text synthetic micro-benchmark ran at ~318 texts/sec (implying ~2.6 min for the full
+catalog), but the real 50K-item run was still going after 25+ minutes before being killed, and a
+second, more carefully instrumented attempt showed the same pattern (fast for the first ~130s of
+compute, then degrading well below the benchmarked rate). Text length/diversity differences between
+the synthetic benchmark and real catalog text don't plausibly account for a 10x gap on their own —
+the most likely explanation is CPU throttling under sustained load in this sandboxed/virtualized
+environment (a fast initial burst, then throttling once some credit is exhausted), not a bug in the
+encoding code itself.
+
+**Decision**: since the catalog is frozen and read-only for the entire competition (never changes),
+its embeddings never need to be computed more than once, ever. Precompute the full
+`_catalog_embeddings.npy` matrix once during our own development, and **ship it as a bundled
+submission asset** (alongside the bundled model weights already required by D-LATENCY's offline-
+packaging fix) rather than relying on `CatalogIndex._ensure_dense_ready()`'s cache-or-compute logic
+to work fast (or at all, under a possible time limit) on the official judge's machine. The runtime
+code path is unchanged — `_ensure_dense_ready()` still checks for a cache file first — but the
+submission now guarantees that cache file is already present, so official scoring only ever hits the
+fast `np.load()` branch, never the slow encode branch.
+
+**Action**: add an explicit Phase 0.2 acceptance item (build and commit the embeddings cache once)
+and a Phase 5.2 packaging item (the cache file ships with `submission/`, alongside the bundled model
+weights). See `05_BUILD_PLAN.md`.
+
+**This does not change any of Phase 0's scored behavior** — it's a deployment/packaging decision
+about *when* a one-time, input-independent computation happens, not what the agent does per turn.

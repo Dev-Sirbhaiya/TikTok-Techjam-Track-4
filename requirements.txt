@@ -1,16 +1,19 @@
-# Dependencies for the TechJam Conversational Search starter agent + local evaluator.
+# Dependencies for the TechJam Conversational Search starter agent + local evaluator,
+# plus this project's own Agent implementation under src/copilot/.
 #
-# The participant repo (external/techjam-conversational-search) ships no
-# requirements.txt / pyproject.toml / setup.py. Its starter/agent.py and
-# evaluator/local_evaluator.py import only Python standard library modules
-# (json, re, sqlite3, argparse, random, statistics, uuid, collections,
-# pathlib) -- confirmed by inspecting both files directly.
+# The participant repo (external/techjam-conversational-search) itself ships no
+# requirements.txt / pyproject.toml / setup.py -- its starter/agent.py and
+# evaluator/local_evaluator.py import only the Python standard library.
 #
-# Python 3.10+ is required (README recommendation). Tested here with
-# Python 3.13.7. No third-party packages are required to run the starter
-# agent or the local evaluator as of participant-kit release
-# (commit 9a35be51780ff1caf89eceaabca34259e946f40f).
+# Python 3.10+ is required (README recommendation). Tested here with Python 3.13.7.
 #
-# This file is intentionally left with no pinned packages. If your own
-# agent implementation adds dependencies (e.g. an LLM client SDK), add
-# them here and re-run `pip freeze > requirements-freeze.txt`.
+# Our own implementation (src/copilot/) adds:
+numpy>=2.0
+sentence-transformers>=6.0   # dense retrieval (bge-small-en-v1.5) + cross-encoder reranking
+
+# Sparse (BM25) retrieval is a hand-rolled, dependency-free inverted index in
+# src/copilot/catalog.py -- deliberately not an external BM25 library, to keep the
+# submission's dependency footprint (and offline-model risk, see implementation/06_DECISION_LOG.md
+# D-LATENCY / the round-2 offline-packaging fix) as small as possible.
+
+# Re-run `pip freeze > requirements-freeze.txt` after any dependency change.

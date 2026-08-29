@@ -22,6 +22,14 @@ below ends with a **"Phase exit codex review"** line naming the exact base commi
 
 ### The full phase-closeout sequence (automatic — do not wait to be asked per phase)
 
+0. **Barrier: confirm every step's background review in this phase has actually returned and been
+   triaged.** **Added per codex review round 2**: step-level reviews are launched asynchronously and
+   don't block progress to the next step by design — which means reaching the phase's last step is
+   *not* proof every earlier step's review has finished. Check for any step-level review still
+   outstanding (no completion notification received, or a raw report sitting untriaged in
+   `wiki/reviews/`) before proceeding to step 1 below; wait for and triage it first. Skipping this
+   risks a late step-level finding arriving *after* the phase-closeout commit, contradicting
+   `CLAUDE.md`'s "no finding silently dropped" rule.
 1. Run the phase-level codex review above.
 2. **Triage every finding** — fix it (small commit referencing the review) or explicitly decline it
    with a one-line reason. No finding silently dropped, same rule as step-level reviews.
@@ -62,21 +70,37 @@ architecture from day one (per the user's own instruction: RRF, hybrid retrieval
 metadata are Phase 0 items, not later refinements — a plain BM25-only system is *not* an acceptable
 Phase 0 in this build, unlike a generic "minimum viable" framing).
 
-### 0.1 — Repository scaffolding + catalog/session loading
+### 0.1 — Repository scaffolding + catalog/session loading + evaluator shim
 - Create `src/copilot/` package skeleton (empty modules per `04_SYSTEM_DESIGN.md`'s layout).
 - Load `catalog.jsonl` (50K products) and `data/public_set.jsonl` (200 sessions) into memory; build
   the gazetteer (brand/color/material/size vocabularies scanned from `details`/`categories`/`title`).
   **Remember**: `details` has zero keys common across items even within one leaf category (verified —
   `06_DECISION_LOG.md` resolved-Q7) — the gazetteer must scan values generically, not assume fields.
-- Acceptance: catalog loads in <5s, gazetteer produces non-empty brand/color/material/size sets.
+- **Create and run `tools/install_shim.py`** (see `04_SYSTEM_DESIGN.md`'s D-PACKAGING fix) as part of
+  this step, not merely described elsewhere and assumed to happen later. **CORRECTED per codex review
+  round 2**: the original draft only mentioned the shim in `04_SYSTEM_DESIGN.md`'s prose, with nothing
+  in this step's actual checklist requiring it — an executor could reach step 0.3 without ever
+  generating it, silently wiring the evaluator to the original vendor baseline instead of the real
+  agent. It is now an explicit task here, with its own acceptance check below.
+- Acceptance: catalog loads in <5s; gazetteer produces non-empty brand/color/material/size sets;
+  `python tools/install_shim.py` runs with no error and `external/techjam-conversational-search/starter/agent.py`
+  now contains the generated re-export; `python -c "from copilot.agent import Agent"` run from
+  `external/techjam-conversational-search/` succeeds (proves the `sys.path` fix actually resolves).
 
 ### 0.2 — BM25 + dense retrieval + RRF fusion (the hybrid retrieval floor)
-- Implement `retrieval.py`: `bm25s` (or reuse starter's SQLite FTS5) sparse leg; `bge-small-en-v1.5`
-  dense leg, catalog embedded once offline and cached; `reciprocal_rank_fusion()`.
+- Implement `retrieval.py`: hand-rolled inverted-index BM25 (see `catalog.py`) sparse leg;
+  `bge-small-en-v1.5` dense leg, catalog embedded once offline and cached; `reciprocal_rank_fusion()`.
 - Implement the metadata/structured filter: dict-based inverted index over category/price-bucket/brand.
+- **Self-caught during implementation (see `06_DECISION_LOG.md` D-EMBED-CACHE)**: encoding the full
+  50K catalog showed inconsistent, sometimes very slow throughput in the dev sandbox (likely CPU
+  throttling under sustained load, not a code bug). Since the catalog is frozen for the whole
+  competition, this only needs to happen once, ever — build the cache now and **commit
+  `data/_catalog_embeddings.npy` to the submission bundle** (Phase 5.2) rather than relying on it
+  being fast (or even completing within a time limit) on the official judge's machine.
 - Acceptance: given a query string, returns a fused top-60 candidate list with all three signals
   contributing (spot-check: a brand-name query should surface that brand near the top via the metadata
-  filter even if BM25/dense alone wouldn't rank it first).
+  filter even if BM25/dense alone wouldn't rank it first); `data/_catalog_embeddings.npy` exists and
+  reloads instantly on a second run (proves the cache path, not just the compute path, works).
 
 ### 0.3 — Naive end-to-end wiring (control-group baseline)
 - Wire retrieval directly into `starter/agent.py`'s re-exported `Agent` with a **fixed question
@@ -188,10 +212,22 @@ already commits to a train/validation split "for Phase 3.1 offline tuning and Ph
 but a manual grid sweep here is exactly the same failure mode (selecting configuration and reporting
 its score on the same data). **Fix, applied now**: create the deterministic 160/40 `sample_id`-hash
 split from `10_PRE_REGISTRATION.md` *before* this step (moved earlier than originally scoped — see
-that doc's updated scope), sweep `base_threshold`/`decay_rate` (turn policy) and `low`/`high` (entropy
-gate) against the 160-session training split only, then report the winning configuration's numbers on
-the untouched 40-session validation split. Record both the full sweep (training split) and the final
-validation-split numbers in `wiki/08_evaluation_log.md` — not just the winning training-split values.
+that doc's updated scope), sweep `overgenerality.py`'s `low`/`high`/`temperature`/`min_pool_to_bother`/
+`no_ask_after_turn` and `ranker.py`'s `margin_skip` (self-caught during implementation as needing the
+same empirical calibration as `temperature` — see the comment on `rerank()`'s signature) against the
+160-session training split only, then confirm the winning configuration's numbers on the
+untouched 40-session validation split. Record the full sweep (training split) and the validation-split
+confirmation numbers in `wiki/08_evaluation_log.md`.
+
+**CORRECTED per codex review round 2**: reporting Phase 1's number only on the 40-session validation
+split makes it incomparable to Phase 0's exit number (computed over all 200) — the unchanged "no
+regression vs. Phase 0" exit criterion would then be comparing figures from different sample sets,
+where sample composition alone could produce an apparent pass or fail. **Fix**: after selecting the
+winning configuration on the split, run one more confirmatory pass of that **locked** configuration
+against the **full 200 sessions** — this number, not the validation-split number, is what Phase 1's
+exit criterion compares against Phase 0's (also full-200) exit number. Log both: the validation-split
+number (proves no overfitting to the sweep) and the full-200 number (the actual apples-to-apples
+exit-criteria comparison).
 
 ### 1.4 — Adaptive orchestrator polish (FR-8 completion)
 Add the remaining named adaptive branch points from `research/07`'s recommendation: skip-rerank on
@@ -234,7 +270,8 @@ found as its own line in the wiki update, not folded into a generic "reviewed" n
 
 ---
 
-## Phase 2.5 — Cheap refinements to Phase 2 (bundle into 2.1-2.3's work, not separate builds)
+## Phase 2.5 — Cheap refinements to Phase 2 (bundle into 2.1-2.3's work, not separate builds; no
+separate phase-closeout — see correction below)
 
 - **Retriever-disagreement as a live VoI proxy** (extends 2.3): rank-correlation/overlap between BM25
   and dense candidate lists as an additional signal, computable with zero ground truth.
@@ -244,8 +281,13 @@ found as its own line in the wiki update, not folded into a generic "reviewed" n
   distribution updated incrementally, rather than fully recomputed each turn — an implementation
   cleanliness upgrade, not new capability.
 
-**Phase 2.5 exit codex review**: `codex exec review --base <SHA at Phase 2's phase-closeout commit>
---title "Phase 2.5 exit: refinements"`, then the phase-closeout sequence above.
+**CORRECTED per codex review round 2**: this phase's own text says its work is bundled into steps
+2.1-2.3, committed *before* Phase 2's closeout, not as separate post-closeout commits — so a "Phase
+2.5 exit review" diffed against Phase 2's closeout commit would necessarily be empty (nothing new
+exists after that point to review). **Fix: Phase 2.5 has no separate phase-closeout.** Its
+refinements are covered by Phase 2's own phase-level review (since they land in the same commits),
+and Phase 2's phase-closeout sequence reports on Phase 2+2.5 together. The next phase's review base
+is Phase 2's closeout commit (see Phase 3, below) — not a separate Phase 2.5 commit that doesn't exist.
 
 ---
 
@@ -263,9 +305,9 @@ path as any other turn. Apply a Rocchio-style update, **bounded and positive-hea
 literature on query drift (`research/06` cross-ref; `/My Ideas/` D9): high weight on original signal,
 small positive-feedback weight, near-zero/heavily-damped negative term, cap feedback at k≤5.
 
-**Phase 3 exit codex review**: `codex exec review --base <SHA at Phase 2.5's phase-closeout commit>
---title "Phase 3 exit: offline tuning + comparative feedback"`, then the phase-closeout sequence
-above — pay particular attention to whether 3.1's offline tuning loop leaked validation-split data
+**Phase 3 exit codex review**: `codex exec review --base <SHA at Phase 2's phase-closeout commit —
+Phase 2.5 has no separate closeout, see its section above> --title "Phase 3 exit: offline tuning +
+comparative feedback"`, then the phase-closeout sequence above — pay particular attention to whether 3.1's offline tuning loop leaked validation-split data
 into training (a specific, checkable failure mode per `10_PRE_REGISTRATION.md`); highlight it
 explicitly in the wiki if found, don't just note "passed review."
 
@@ -323,20 +365,34 @@ this is the headline number set for the written report.
 Copy `src/copilot/` into `submission/src/`, write the top-level `submission/agent.py` re-export,
 `requirements.txt`, and confirm the recommended layout matches exactly.
 
-**CORRECTED per codex review**: the original draft only mentioned source + `requirements.txt`, which
-is insufficient — `docs/submission_rules.md` warns final scoring may run with **network access
+**CORRECTED per codex review, round 1**: the original draft only mentioned source + `requirements.txt`,
+which is insufficient — `docs/submission_rules.md` warns final scoring may run with **network access
 disabled**, and the guaranteed-path cross-encoder (`ms-marco-MiniLM-L-6-v2`) and dense encoder
 (`bge-small-en-v1.5`) are Hugging Face models that `sentence-transformers` will otherwise try to
-download on first use, failing before the agent can respond at all. Concretely, one of:
-1. **Bundle the model weights** in `submission/models/` (both models together are well under 200MB)
-   and load explicitly from that local path rather than a bare model-ID string that implies a
-   download; document this path in the README.
-2. **Or** provide a tested, explicit prefetch step (`python tools/prefetch_models.py`, populating the
-   local `sentence-transformers` cache) as a documented, verified-working part of setup — verify by
-   actually testing a run with network disabled (e.g. `HF_HUB_OFFLINE=1`) before trusting this path,
-   not just documenting it optimistically.
-This must be tested, not assumed, before Phase 5.3's reproducibility check — add "run once with
-network access disabled" as an explicit item in that step.
+download on first use, failing before the agent can respond at all.
+
+**CORRECTED again, round 2**: the round-1 fix offered prefetch-into-local-cache as an equally valid
+alternative to bundling — that's not actually sufficient on a **clean** official scorer, since if
+network access is disabled *before* setup even runs, there is no working machine's cache to prefetch
+into in the first place; testing "offline mode" only after a successful prefetch on the dev machine
+just proves the dev machine's cache works, not that the submitted bundle is self-contained. **Bundling
+is now the required approach, not an alternative:**
+1. **Bundle the model weights in `submission/models/`** (both models together are well under 200MB)
+   and load explicitly from that local path (`SentenceTransformer("submission/models/bge-small")`,
+   not a bare Hugging Face model-ID string) — this is required, not optional.
+2. A local prefetch cache is a **developer convenience during iteration only**, never a substitute for
+   the bundled artifact in the actual submission.
+This must be tested against the **submitted bundle itself**, not the dev machine's cache — Phase 5.3's
+reproducibility check must extract/copy `submission/` to a location with no pre-existing HF cache and
+run with network access disabled (`HF_HUB_OFFLINE=1`) from there.
+
+**Also bundle the precomputed catalog embeddings** (`06_DECISION_LOG.md` D-EMBED-CACHE,
+self-caught during 0.2's implementation): copy `data/_catalog_embeddings.npy` into
+`submission/data/` so the official run only ever hits `CatalogIndex`'s fast cache-load branch,
+never the slow encode-50K-items-from-scratch branch — this is unrelated to network access (the
+catalog is local either way) but matters just as much, since a from-scratch encode showed highly
+inconsistent throughput in the dev sandbox and the official environment's performance
+characteristics are unknown.
 
 ### 5.3 — README + reproducibility check
 Project overview, setup/install steps, exact run command, disclosed model choice/cost/latency/offline-

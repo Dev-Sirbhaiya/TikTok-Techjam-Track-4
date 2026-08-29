@@ -244,19 +244,33 @@ def preference_boost(product_embedding: np.ndarray, state: DialogState, lam=0.15
 ```python
 import math
 
-def score_entropy(top_k_scores: list[float]) -> float:
+def score_entropy(top_k_scores: list[float], temperature: float = 0.02) -> float:
     """H_k(q) = -sum(P_i log P_i) / log(k), P_i = softmax-normalized score. In [0,1]. From
     arXiv:2509.06185 -- the closest direct prior art for this exact mechanism.
 
-    CORRECTED per codex review (wiki/reviews/architecture-synthesis-2026-08-29.md): the original
-    draft normalized by plain sum, not softmax. Fusion + preference_boost scores can be negative or
-    mixed-sign (preference_boost subtracts a negative-affinity term), which breaks plain-sum
-    normalization (negative "probabilities") and can raise a log domain error -- the evaluator turns
-    that exception into a silent empty/missed turn. Use an actual, numerically-stable softmax."""
+    CORRECTED per codex review, round 1 (wiki/reviews/architecture-synthesis-2026-08-29.md): the
+    original draft normalized by plain sum, not softmax. Fusion + preference_boost scores can be
+    negative or mixed-sign (preference_boost subtracts a negative-affinity term), which breaks
+    plain-sum normalization (negative "probabilities") and can raise a log domain error -- the
+    evaluator turns that exception into a silent empty/missed turn. Use an actual, numerically-
+    stable softmax.
+
+    CORRECTED per codex review, round 2 (wiki/reviews/two-tier-and-viz-2026-08-29.raw.txt): a
+    unit-temperature softmax over RAW RRF scores is broken in the opposite direction -- RRF scores
+    are `sum(1/(k+rank+1))`, so top-K values typically differ only in the thousandths (k=60 means
+    even rank-1 vs rank-10 differ by ~0.002). `exp(s - m)` on values this close together produces
+    near-uniform probabilities regardless of actual ranking confidence, so entropy sits near 1.0
+    almost always and the 0.3/0.8 calibration thresholds never discriminate anything -- violating
+    step 0.9's own acceptance criterion (clarification rate neither ~0% nor ~100%). Fix: divide by a
+    `temperature` before exponentiating, scaling RRF's small dynamic range up into a range where
+    softmax actually discriminates. `temperature` is NOT a fixed constant -- it must be calibrated
+    together with `low`/`high` in Phase 1.3's threshold sweep (default 0.02 here is a starting point
+    sized to RRF's ~1/60 scale, not a validated value)."""
     if not top_k_scores:
         return 0.0
-    m = max(top_k_scores)
-    exps = [math.exp(s - m) for s in top_k_scores]   # subtract max for numerical stability
+    scaled = [s / temperature for s in top_k_scores]
+    m = max(scaled)
+    exps = [math.exp(s - m) for s in scaled]   # subtract max for numerical stability
     total = sum(exps) or 1e-9
     probs = [e / total for e in exps]
     k = len(probs)
