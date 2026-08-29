@@ -1,0 +1,7 @@
+{
+  "baseline": {},
+  "min_pool_extreme_1": {"CLARIFY_MIN_POOL_TO_BOTHER": 1},
+  "min_pool_extreme_15": {"CLARIFY_MIN_POOL_TO_BOTHER": 15},
+  "no_ask_after_extreme_2": {"CLARIFY_NO_ASK_AFTER_TURN": 2},
+  "no_ask_after_extreme_10": {"CLARIFY_NO_ASK_AFTER_TURN": 10}
+}

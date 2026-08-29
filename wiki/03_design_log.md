@@ -366,8 +366,26 @@ own pseudocode. Removed rather than wired in with invented semantics (no design 
 what an upper entropy ceiling should do). Also introduced `src/copilot/strategy_config.py`,
 centralizing the thresholds Phase 3.1 tunes (previously hardcoded literals scattered across
 `overgenerality.py`/`agent.py`/`phase2/voi.py`) behind env-var overrides, and
-`tools/tune_strategy.py`, a reusable rollout→score tool for Phase 3.1's actual sweep (still pending
-as of this entry — this reproducibility detour came first).
+`tools/tune_strategy.py`, a reusable rollout→score tool.
+
+**Codex review** (`wiki/reviews/phase3.1-determinism-fix-2026-08-30.raw.txt`, reviewing commit
+`7be9ba7`) — 1 finding, fixed: `tune_strategy.py`'s subprocess environment wasn't isolated from the
+invoking shell (`dict(os.environ)` let an inherited `COPILOT_*` variable silently leak into any
+candidate that omits that key, including `baseline: {}`, without appearing in the logged config).
+Verified no actual contamination occurred in this session's runs (no such variables were ever set),
+but fixed anyway for correctness — the harness now explicitly clears every managed variable before
+applying each candidate's overrides.
+
+**Phase 3.1's actual tuning sweep, now run with the fixed harness**: systematically searched
+`should_clarify`'s three knobs (`CLARIFY_BASE_LOW`, `CLARIFY_MIN_POOL_TO_BOTHER`,
+`CLARIFY_NO_ASK_AFTER_TURN`) against both splits. Result: every candidate in a wide, sensible range
+matched the hand-set Phase 0/1.3 defaults byte-for-byte (e.g. `CLARIFY_BASE_LOW` tested at
+0.01/0.2/0.3/0.4/0.5/0.7 all identical); only genuinely extreme values degraded performance sharply
+(`CLARIFY_BASE_LOW=0.99` → TechnicalScore 0.188 on training; `CLARIFY_NO_ASK_AFTER_TURN=2` → 0.219
+on validation). This is a real, systematically-verified finding, not an inconclusive search: the
+existing defaults sit in a wide, robust operating region with comfortable margin before any cliff,
+and no candidate beat them on held-out data — per Ablation 3's own decision rule, **the defaults are
+kept unchanged**. Phase 3.1 is closed out on this basis; step 3.2 (comparative feedback) is next.
 
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 

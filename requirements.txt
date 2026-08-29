@@ -16,4 +16,10 @@ sentence-transformers>=6.0   # dense retrieval (bge-small-en-v1.5) + cross-encod
 # submission's dependency footprint (and offline-model risk, see implementation/06_DECISION_LOG.md
 # D-LATENCY / the round-2 offline-packaging fix) as small as possible.
 
+# Optional, experiment-only: the LLM-backed path (ranker.py's listwise booster, ad-hoc turn-by-turn
+# probing) is never required by the shipped default (NFR-2 / D-LLM-TIER) -- the organizer does not
+# provide hosted model credentials, so this only matters for local experiments with our own key.
+anthropic>=0.40
+python-dotenv>=1.0
+
 # Re-run `pip freeze > requirements-freeze.txt` after any dependency change.

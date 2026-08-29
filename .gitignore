@@ -23,3 +23,6 @@ Thumbs.db
 # Claude Code harness state (not project content)
 .claude/
 *.log
+
+# Secrets - never commit API keys
+.env

@@ -18,6 +18,17 @@ environment — no upstream URL hunting needed later.
 | Amazon Reviews 2023 loader code | https://github.com/hyp1231/AmazonReviews2023 | `external/AmazonReviews2023/` | reference only; problem statement explicitly says we do **not** need the full upstream dataset |
 | Amazon Reviews 2023 dataset (full, HF) | https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023 | not downloaded | out of scope — organizer's frozen kit is authoritative; only pull specific files here if the participant kit is missing something documented in its own schema |
 
+## API keys / credentials (optional -- never required by the shipped default)
+
+- The organizer does not provide hosted model credentials (see `implementation/06_DECISION_LOG.md`
+  D-LLM-TIER / NFR-2) -- the scored path is guaranteed to run with zero external API calls
+  (cross-encoder reranker, no LLM). An `ANTHROPIC_API_KEY` is only used for opt-in local
+  experiments (`ranker.py`'s optional listwise LLM booster, ad-hoc turn-by-turn probing).
+- Key lives in an untracked `.env` at the repo root (`.gitignore`d) -- `.env.example` documents the
+  expected variable name. `anthropic` and `python-dotenv` were added to `requirements.txt` and
+  installed in the venv (2026-08-30) specifically to support this; both are optional at runtime
+  (nothing in `src/copilot/`'s default path imports them unconditionally).
+
 ## Python environment
 
 - Venv location: `.venv/` (project root), created with `python -m venv .venv` using Python 3.13.7.

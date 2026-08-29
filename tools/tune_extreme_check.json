@@ -1,0 +1,4 @@
+{
+  "extreme_always_ask": {"CLARIFY_BASE_LOW": 0.01},
+  "extreme_never_ask": {"CLARIFY_BASE_LOW": 0.99}
+}

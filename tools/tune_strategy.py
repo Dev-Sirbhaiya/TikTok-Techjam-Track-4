@@ -41,7 +41,14 @@ def run_one(split: str, name: str, overrides: dict) -> dict:
             if line and json.loads(line)["sample_id"] in keep_ids:
                 dst.write(line + "\n")
 
+    # CORRECTED per codex review: pop every managed var first, not just conditionally overwrite the
+    # ones a candidate happens to set -- otherwise a COPILOT_* var already present in the invoking
+    # shell (e.g. left over from an earlier manual debugging session) would silently leak into any
+    # candidate that omits that key, including `baseline: {}`, and the leaked value wouldn't even
+    # appear in the logged `overrides` dict -- an irreproducible winner reported as reproducible.
     env = dict(os.environ)
+    for env_var in ENV_VAR_BY_KEY.values():
+        env.pop(env_var, None)
     for key, value in overrides.items():
         env[ENV_VAR_BY_KEY[key]] = str(value)
 

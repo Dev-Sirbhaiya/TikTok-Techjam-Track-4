@@ -1,0 +1,5 @@
+{
+  "baseline_0.3": {},
+  "moderate_raise_0.5": {"CLARIFY_BASE_LOW": 0.5},
+  "moderate_raise_0.7": {"CLARIFY_BASE_LOW": 0.7}
+}

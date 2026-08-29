@@ -27,6 +27,14 @@ def _int(name: str, default: int) -> int:
 
 # overgenerality.should_clarify: the base entropy threshold above which a turn is a clarification
 # candidate at all (before phase2/voi.py's disagreement-based adjustment). Phase 0's initial guess.
+# Phase 3.1 systematically swept this against the training split (tools/tune_strategy.py) and found
+# it's inert across [0.01, 0.7] -- byte-identical TechnicalScore at 0.01/0.2/0.3/0.4/0.5/0.7 -- then
+# degrades catastrophically at 0.99 (0.4176 -> 0.188 on the training split). The entropy distribution
+# this pipeline actually produces (DEFAULT_TEMPERATURE=0.02's peaked softmax) is effectively bimodal:
+# turns are either clearly ambiguous (entropy well above 0.7) or already resolved by another gate
+# (pool_size/turns_remaining), with little continuous middle ground for this threshold to discriminate
+# within. No value in the searched range beat the default; 0.3 stays, with comfortable margin before
+# the degradation cliff. See wiki/08_evaluation_log.md's Phase 3.1 rows for the full sweep.
 CLARIFY_BASE_LOW = _float("COPILOT_CLARIFY_BASE_LOW", 0.3)
 
 # overgenerality.should_clarify: don't bother clarifying once the candidate pool is already this
