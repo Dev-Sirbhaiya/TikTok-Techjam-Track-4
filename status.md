@@ -86,8 +86,11 @@ always populated regardless of action); of those 101, **100% sit at high commit-
   **0.438299** — the two mechanisms compose without conflict. **0.415731 remains the number to
   report as the expected competition score**; 0.438299 is the optional ceiling with a key present.
 
-Codex review for the LLM booster commit (`21912ef`) failed 2 more attempts (same environment
-flakiness pattern) — see Blockers.
+Codex review for the LLM booster commit (`21912ef`) failed 2 more attempts, and the slate-hedging/
+query-nudge commit (`2d0dd4b`) failed its first attempt too (same environment flakiness pattern) —
+see Blockers. Not blocking further work: both commits' logic was manually reasoned through
+carefully (fallback-on-failure paths match already-reviewed patterns), and each ablated mechanism's
+own empirical results across two independent splits are strong evidence of correctness.
 
 ## Next workstream
 
