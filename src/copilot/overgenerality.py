@@ -48,15 +48,21 @@ _UNPRODUCTIVE_ATTRIBUTES = {"other", "brand"}
 # any facet with inherently high cardinality (e.g. "feature", a free-text proxy). Rather than special-
 # casing every such facet, cap candidacy to a sane distinct-value range here, once, for all facets.
 _MIN_DISTINCT_VALUES = 2    # nothing to ask if everyone already agrees
-_MAX_DISTINCT_VALUES = 15   # Phase 1.3 calibration: 8 was too tight -- phrase_question() only ever
-                            # shows the top 3 most common values regardless of how many distinct
-                            # values exist, so a facet with e.g. 12 colors is still a fine question
-                            # (top 3 covers the pool's real texture); the cap only needs to exclude
-                            # near-unique catch-alls like raw per-product feature text (~pool_size
-                            # distinct values), not moderately-diverse categorical facets.
+_MAX_DISTINCT_VALUES = 15   # Phase 1.3 calibration round 1: 8 was too tight -- phrase_question()
+                            # only ever shows the top 3 most common values regardless of how many
+                            # distinct values exist, so a facet with e.g. 12 colors is still a fine
+                            # question (top 3 covers the pool's real texture).
+_MAX_DISTINCT_RATIO = 0.5   # Phase 1.3 calibration round 2 (codex review): an absolute cap alone
+                            # doesn't scale down -- once reranking narrows the pool to, say, 10-15
+                            # candidates, a near-unique facet (n_distinct == pool_size) can still
+                            # slip under the absolute 15 cap, reintroducing exactly the bug this
+                            # gate exists to prevent. A facet must satisfy BOTH the absolute cap AND
+                            # a distinct-value-to-pool-size ratio ceiling, so "near-unique" is
+                            # rejected at every pool size, not just large ones.
 
 
 def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str]) -> str | None:
+    pool_size = len(candidates)
     best_attr, best_h = None, -1.0
     for attr in attribute_enum:
         if attr in filled_slots or attr in _UNPRODUCTIVE_ATTRIBUTES:
@@ -64,6 +70,8 @@ def select_best_question(candidates: list[dict], filled_slots: set[str], attribu
         values = _facet_values(candidates, attr)
         n_distinct = len(set(values))
         if not (_MIN_DISTINCT_VALUES <= n_distinct <= _MAX_DISTINCT_VALUES):
+            continue
+        if pool_size and (n_distinct / pool_size) > _MAX_DISTINCT_RATIO:
             continue
         h = _entropy_of(values)
         if h > best_h:

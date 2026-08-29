@@ -13,7 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SESSIONS_PATH = REPO_ROOT / "external" / "techjam-conversational-search" / "data" / "public_set.jsonl"
 OUT_PATH = REPO_ROOT / "tools" / "session_split.json"
-VALIDATION_FRACTION = 0.2  # 40 of 200
+N_VALIDATION = 40  # exactly 40 of 200, per implementation/10_PRE_REGISTRATION.md
 
 
 def split_key(sample_id: str) -> float:
@@ -29,8 +29,13 @@ def main() -> None:
             if line:
                 sample_ids.append(json.loads(line)["sample_id"])
 
-    validation = sorted(sid for sid in sample_ids if split_key(sid) < VALIDATION_FRACTION)
-    training = sorted(sid for sid in sample_ids if sid not in set(validation))
+    # CORRECTED per codex review: thresholding the hash (< 0.2) only produces ~40 sessions in
+    # expectation, not exactly 40 -- it produced 35/165 for the actual committed IDs, contradicting
+    # the pre-registered 160/40 partition. Sort by the deterministic hash and take exactly the
+    # first N_VALIDATION instead -- still fully deterministic, now exact.
+    ranked = sorted(sample_ids, key=split_key)
+    validation = sorted(ranked[:N_VALIDATION])
+    training = sorted(ranked[N_VALIDATION:])
 
     OUT_PATH.write_text(json.dumps({
         "training": training,

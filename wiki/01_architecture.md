@@ -34,9 +34,9 @@ User message → NLU/Slot Extraction (rule+embedding, LLM optional)
 | Cross-Encoder Reranker (+ optional LLM booster) | I | done (Phase 0) | `src/copilot/ranker.py` — `ms-marco-MiniLM-L-6-v2` guaranteed stage; LLM booster stubbed, not required |
 | Dialog State Tracker (`DialogState`) | II | done (Phase 0) | `src/copilot/state.py` — slots, tiered rejection memory, accumulated_terms, exhausted-attribute tracking |
 | Change-Point / Override Detector | II | done (Phase 0) | `src/copilot/nlu.py`'s forced-override template match + negation cues; now also resets preference vectors (post-review fix) |
-| Question Selector / Over-Generality Gate | II | done (Phase 0) | `src/copilot/overgenerality.py` — calibrated-temperature softmax entropy (2 rounds of review fixes), facet candidacy capped to a presentable 2-8 distinct-value range |
+| Question Selector / Over-Generality Gate | II | done (Phase 0-1) | `src/copilot/overgenerality.py` — calibrated-temperature softmax entropy; facet candidacy gated by BOTH an absolute distinct-value cap (2-15) AND a distinct-value-to-pool-size ratio (≤0.5), so near-unique facets are excluded regardless of absolute pool size (3 rounds of review fixes total) |
 | Preference-Vector Boost | III | done (Phase 0) | `src/copilot/preference.py` — EMA positive/negative affinity, additive ranking-time boost, hard-reset on override |
-| Adaptive Orchestrator | III | partial (Phase 0) | confidence-gated rerank-skip (`ranker.py`) and buying-intent-driven retrieval breadth exist inline; a named, logged state machine is Phase 1 step 1.4 |
+| Adaptive Orchestrator | III | done (Phase 1.4) | `src/copilot/orchestrator.py` — named, logged decision points (`retrieval_breadth`, `rerank_depth`, `turn_action`); retrieval.py's hard-filter choice moved out of the retrieval primitive into this layer |
 | Evaluator harness integration | IV | done (Phase 0) | `tools/install_shim.py` (tracked generator, not a hand-committed file inside gitignored vendor code) + `tools/run_eval.py` |
 
 **Phase 0 evaluator result (post codex-review fixes, `aa41ca2`)**: HitRate@10 0.39, MRR 0.2256,

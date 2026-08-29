@@ -240,6 +240,18 @@ def test_select_best_question_skips_near_unique_facets():
     assert attr == "color"  # color has 2 presentable values; feature has 30 near-unique ones
 
 
+def test_select_best_question_ratio_gate_catches_small_near_unique_pools():
+    # Regression for codex review round 2: an absolute distinct-value cap alone doesn't scale down
+    # -- once reranking narrows the pool to e.g. 10 candidates, a near-unique facet's distinct
+    # count (10) can slip under the absolute cap (15) even though it's just as "near-unique"
+    # relative to this smaller pool. The ratio gate (n_distinct/pool_size) catches this regardless
+    # of absolute pool size.
+    small_pool = [{"attributes": {"feature": f"unique {i}", "color": "black" if i % 2 else "red"}}
+                  for i in range(10)]
+    attr = select_best_question(small_pool, filled_slots=set(), attribute_enum=["feature", "color", "other", "brand"])
+    assert attr == "color"
+
+
 def test_no_new_info_turn_does_not_trigger_rejection():
     # Regression for codex review finding: the simulator's own decline templates contain "don't"
     # and were being misread as an implicit rejection by rejection_memory's negation check --

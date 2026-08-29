@@ -95,7 +95,6 @@ class Agent:
         state.candidate_pool = [c["parent_asin"] for c in ranked]
 
         action = decide_turn_action(state, entropy, len(ranked))
-        record_action(action, entropy, state.turns_remaining, trace)
 
         response: dict = {"message": "", "ask_attribute": None, "recommendations": []}
         if ranked:
@@ -114,6 +113,11 @@ class Agent:
         if action == "commit" or not response["message"]:
             response["message"] = phrase_recommendation(ranked[:top_k])
 
+        # CORRECTED per codex review: this used to be recorded right after decide_turn_action(),
+        # before the "nothing productive to ask" fallback above could downgrade "ask"/"both" to
+        # "commit" -- the trace would then disagree with the actual emitted action/response.
+        # Recording after fallback resolution means the trace always matches what was really sent.
+        record_action(action, entropy, state.turns_remaining, trace)
         log_turn_rationale(session_id, turn, state, action, ranked[:3], trace)
         state.turn_count = turn
         return response
