@@ -15,8 +15,10 @@ from .logging_ import log_turn_rationale
 from .nlu import apply_extraction, extract_slot_updates
 from .orchestrator import OrchestrationTrace, decide_rerank_depth, record_action, route_retrieval_breadth
 from .overgenerality import score_entropy, select_best_question
+from .phase2.action_policy import record_outcome, utility_multiplier
+from .phase2.voi import adjusted_clarify_threshold
 from .phrasing import phrase_question, phrase_recommendation
-from .preference import preference_boost, update_preference_vectors
+from .preference import update_preference_vectors
 from .ranker import rerank
 from .rejection_memory import apply_rejection, apply_rejection_filter, detect_rejection_signal
 from .retrieval import retrieve_candidates
@@ -76,16 +78,28 @@ class Agent:
         apply_hard_filter = route_retrieval_breadth(state.buying_intent_score, trace)
 
         query_text = " ".join(state.accumulated_terms) or user_message
-        candidates = retrieve_candidates(query_text, state.slots, apply_hard_filter, self.catalog_index)
+        candidates, disagreement = retrieve_candidates(query_text, state.slots, apply_hard_filter, self.catalog_index)
         candidates = apply_rejection_filter(candidates, state)
 
         turn_embedding = self.catalog_index.encode_text(query_text)
         signal = "negative" if rejection_signal else ("positive" if extraction.get("slot_updates") else None)
-        if signal:
+        if signal == "negative":
             update_preference_vectors(state, turn_embedding, signal)
+        elif signal == "positive":
+            # Phase 2.1: positive-interest tracking goes through MultiInterestState, which
+            # subsumes K=1 (Phase 1's single EMA vector) as its disabled/no-spawn behavior -- see
+            # phase2/multi_interest.py. Negative-affinity tracking is unchanged from Phase 1.
+            if state.multi_interest is None:
+                from .phase2.multi_interest import MultiInterestState
+                state.multi_interest = MultiInterestState()
+            state.multi_interest.update(turn_embedding)
         for c in candidates:
             emb = self.catalog_index.embedding_for(c["parent_asin"])
-            c["_score"] += preference_boost(emb, state) - c.get("_rejection_penalty", 0.0) * 0.05
+            neg_boost = 0.0
+            if state.pref_vector_neg is not None and emb is not None:
+                neg_boost = -0.10 * float((emb * state.pref_vector_neg).sum())
+            pos_boost = state.multi_interest.boost(emb) if state.multi_interest is not None else 0.0
+            c["_score"] += pos_boost + neg_boost - c.get("_rejection_penalty", 0.0) * 0.05
 
         entropy = score_entropy([c["_score"] for c in candidates[:10]]) if candidates else 0.0
         state.pool_entropy = entropy
@@ -94,7 +108,15 @@ class Agent:
         ranked = rerank(candidates[:rerank_depth], state, state.accumulated_terms)
         state.candidate_pool = [c["parent_asin"] for c in ranked]
 
-        action = decide_turn_action(state, entropy, len(ranked))
+        # Phase 2.2: close the bandit's reward loop from whatever was asked last turn -- the LIVE
+        # reward is pool-size reduction only (never the target rank; see D6/D7).
+        if state.last_asked_attribute and state.pool_size_at_ask is not None:
+            record_outcome(state, state.last_asked_attribute, state.pool_size_at_ask, len(ranked))
+
+        # Phase 2.3/2.5: retriever-disagreement-adjusted clarify threshold -- gated behind
+        # phase2.voi.USE_DISAGREEMENT_SIGNAL, ablated before being trusted by default.
+        clarify_low = adjusted_clarify_threshold(0.3, disagreement)
+        action = decide_turn_action(state, entropy, len(ranked), low=clarify_low)
 
         response: dict = {"message": "", "ask_attribute": None, "recommendations": []}
         if ranked:
@@ -102,11 +124,13 @@ class Agent:
 
         excluded = set(state.slots.keys()) | state.exhausted_attributes
         if action in ("ask", "both"):
-            attr = select_best_question(ranked, excluded, ATTRIBUTE_ENUM)
+            attr = select_best_question(ranked, excluded, ATTRIBUTE_ENUM,
+                                         utility_fn=lambda a: utility_multiplier(state, a))
             if attr:
                 response["ask_attribute"] = attr
                 response["message"] = phrase_question(attr, ranked)
                 state.last_asked_attribute = attr
+                state.pool_size_at_ask = len(ranked)  # Phase 2.2: snapshot for next turn's reward
             else:
                 action = "commit"  # nothing productive left to ask -- fall through to commit phrasing
 

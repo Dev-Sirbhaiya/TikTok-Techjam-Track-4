@@ -9,6 +9,23 @@ from __future__ import annotations
 from .catalog import CatalogIndex
 
 
+def retriever_disagreement(bm25_ranked: list[str], dense_ranked: list[str], top_n: int = 20) -> float:
+    """0 = BM25 and dense fully agree on the top-N (low ambiguity); 1 = no overlap at all (high
+    ambiguity -- a live-computable hint clarification may be worth more than usual). Lives here
+    (not phase2/) because it's a cheap, always-safe-to-compute retrieval diagnostic; phase2/voi.py
+    holds the GATED decision of whether to actually let it influence the clarify threshold --
+    implementation/06_DECISION_LOG.md D6/D7: never conflate a live-computable signal like this
+    with anything requiring ground truth the live agent doesn't have."""
+    if not bm25_ranked or not dense_ranked:
+        return 0.0
+    a = set(bm25_ranked[:top_n])
+    b = set(dense_ranked[:top_n])
+    if not a or not b:
+        return 0.0
+    overlap = len(a & b) / min(len(a), len(b))
+    return 1.0 - overlap
+
+
 def reciprocal_rank_fusion(ranked_lists: list[list[str]], k: int = 60,
                             restrict_to: set | None = None) -> dict[str, float]:
     """Returns {doc_id: fused_score}, NOT just an ordered id list -- callers need the actual score
@@ -30,17 +47,22 @@ def retrieve_candidates(
     apply_hard_filter: bool,
     catalog_index: CatalogIndex,
     k_pool: int = 60,
-) -> list[dict]:
+) -> tuple[list[dict], float]:
     """`apply_hard_filter` is decided by orchestrator.route_retrieval_breadth(), not derived here --
     Phase 1.4 (FR-8): retrieval is a pure mechanism, the orchestrator layer owns strategy decisions
-    (this used to inline `buying_intent_score > 0.6` directly in this function)."""
+    (this used to inline `buying_intent_score > 0.6` directly in this function).
+
+    Returns (candidates, bm25_dense_disagreement) -- Phase 2.3/2.5 (phase2/voi.py) needs the
+    disagreement signal, computed here (not recomputed by the caller) since the BM25/dense
+    searches already happened -- recomputing them a second time would double retrieval cost."""
     bm25_ranked = catalog_index.bm25_search(query_text, top_n=150)
     dense_ranked = catalog_index.dense_search(query_text, top_n=150)
     metadata_ranked = catalog_index.metadata_rank(slots, top_n=150)
+    disagreement = retriever_disagreement(bm25_ranked, dense_ranked)
 
     lists = [r for r in (bm25_ranked, dense_ranked, metadata_ranked) if r]
     if not lists:
-        return []
+        return [], disagreement
 
     restrict_to = None
     if apply_hard_filter:
@@ -58,4 +80,4 @@ def retrieve_candidates(
     candidates = catalog_index.hydrate(top_ids)
     for c in candidates:
         c["_score"] = fused.get(c["parent_asin"], 0.0)
-    return candidates
+    return candidates, disagreement

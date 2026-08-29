@@ -183,6 +183,72 @@ def test_rejection_filter_drops_hard_keeps_soft():
     assert b["_rejection_penalty"] > 0  # soft-rejected material penalized, not dropped
 
 
+def test_retriever_disagreement_full_overlap_is_zero():
+    from copilot.retrieval import retriever_disagreement
+    same = ["a", "b", "c", "d"]
+    assert retriever_disagreement(same, same) == 0.0
+
+
+def test_retriever_disagreement_no_overlap_is_one():
+    from copilot.retrieval import retriever_disagreement
+    assert retriever_disagreement(["a", "b"], ["c", "d"]) == 1.0
+
+
+def test_adjusted_clarify_threshold_lowers_bar_on_disagreement():
+    from copilot.phase2.voi import adjusted_clarify_threshold
+    assert adjusted_clarify_threshold(0.3, disagreement=1.0) < 0.3
+    assert adjusted_clarify_threshold(0.3, disagreement=0.0) == 0.3
+
+
+def test_multi_interest_k1_fallback_matches_single_ema():
+    import copilot.phase2.multi_interest as mi
+    import numpy as np
+    mi.ENABLE_MULTI_INTEREST = False
+    try:
+        state = mi.MultiInterestState()
+        v1 = np.array([1.0, 0.0, 0.0])
+        v2 = np.array([0.0, 1.0, 0.0])
+        state.update(v1)
+        state.update(v2)
+        assert len(state.vectors) == 1  # K=1 disabled -> never spawns a second hypothesis
+    finally:
+        mi.ENABLE_MULTI_INTEREST = True
+
+
+def test_multi_interest_spawns_second_hypothesis_on_divergence():
+    import copilot.phase2.multi_interest as mi
+    import numpy as np
+    state = mi.MultiInterestState()
+    v1 = np.array([1.0, 0.0, 0.0])
+    v2 = np.array([0.0, 1.0, 0.0])  # orthogonal -- similarity 0, well below SPAWN_THRESHOLD
+    state.update(v1)
+    state.update(v2)
+    assert len(state.vectors) == 2
+
+
+def test_action_policy_warm_start_prior_not_cold():
+    from copilot.phase2.action_policy import initial_utility
+    # Warm-started, per D11's cold-start-risk mitigation -- material/color should start above a
+    # neutral 1.0, budget below, matching wiki/09's verified ground truth about reveal channels.
+    assert initial_utility("material") > 1.0
+    assert initial_utility("budget") < 1.0
+
+
+def test_action_policy_record_outcome_updates_utility():
+    import copilot.phase2.action_policy as ap
+    # Disabled by default post-ablation (see the module's own comment) -- force-enable to test the
+    # underlying mechanism itself in isolation from the ablation's on/off decision.
+    original = ap.ENABLE_ACTION_POLICY
+    ap.ENABLE_ACTION_POLICY = True
+    try:
+        state = DialogState()
+        prior = ap.initial_utility("color")
+        ap.record_outcome(state, "color", pool_before=20, pool_after=5)  # a big, productive reduction
+        assert state.facet_utility_history["color"] > prior  # good outcome should raise the estimate
+    finally:
+        ap.ENABLE_ACTION_POLICY = original
+
+
 def test_turns_remaining():
     state = DialogState(turn_count=7)
     assert state.turns_remaining == 3

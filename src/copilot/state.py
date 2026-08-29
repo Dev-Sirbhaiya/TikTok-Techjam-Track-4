@@ -19,6 +19,9 @@ class DialogState:
 
     pref_vector_pos: Optional[np.ndarray] = None
     pref_vector_neg: Optional[np.ndarray] = None
+    multi_interest: Optional[Any] = None  # phase2.multi_interest.MultiInterestState, lazily attached
+    # (kept as Any/None here rather than importing phase2 into state.py, to avoid a Phase-0-depends-
+    # on-Phase-2 layering inversion -- agent.py attaches it lazily on first use)
 
     buying_intent_score: float = 0.5
     turn_count: int = 0
@@ -31,6 +34,7 @@ class DialogState:
     last_asked_attribute: Optional[str] = None
     exhausted_attributes: set[str] = field(default_factory=set)
     facet_utility_history: dict[str, float] = field(default_factory=dict)
+    pool_size_at_ask: Optional[int] = None  # Phase 2.2: snapshot for the bandit's next-turn reward
 
     # Slot confidence tiers ("confirmed" never decays within a session; "inferred" decays after
     # SLOT_TTL_TURNS without reinforcement). See D-slot-decay in implementation/04_SYSTEM_DESIGN.md.

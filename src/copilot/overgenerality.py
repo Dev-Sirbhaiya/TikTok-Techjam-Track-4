@@ -61,7 +61,12 @@ _MAX_DISTINCT_RATIO = 0.5   # Phase 1.3 calibration round 2 (codex review): an a
                             # rejected at every pool size, not just large ones.
 
 
-def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str]) -> str | None:
+def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str],
+                          utility_fn=None) -> str | None:
+    """`utility_fn(attr) -> float` is an optional multiplier on each facet's entropy score --
+    Phase 2.2's contextual bandit (phase2/action_policy.py) passes one in; overgenerality.py stays
+    decoupled from phase2/ (no import), matching the same layering as retrieval.py's disagreement
+    signal. Defaults to a no-op (multiplier 1.0 for everything) when not provided."""
     pool_size = len(candidates)
     best_attr, best_h = None, -1.0
     for attr in attribute_enum:
@@ -73,7 +78,7 @@ def select_best_question(candidates: list[dict], filled_slots: set[str], attribu
             continue
         if pool_size and (n_distinct / pool_size) > _MAX_DISTINCT_RATIO:
             continue
-        h = _entropy_of(values)
+        h = _entropy_of(values) * (utility_fn(attr) if utility_fn else 1.0)
         if h > best_h:
             best_attr, best_h = attr, h
     return best_attr if best_h > 0 else None

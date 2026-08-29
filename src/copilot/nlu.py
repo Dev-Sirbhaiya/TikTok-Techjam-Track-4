@@ -226,6 +226,7 @@ def apply_extraction(state, extraction: dict[str, Any], turn: int) -> None:
         # override is a hard pivot, not a gradual drift, so it gets the same hard reset as slots.
         state.pref_vector_pos = None
         state.pref_vector_neg = None
+        state.multi_interest = None  # Phase 2.1: same hard-reset reasoning applies to hypothesis vectors
 
     for key, value in extraction.get("slot_updates", {}).items():
         state.slots[key] = value

@@ -15,13 +15,16 @@ from __future__ import annotations
 from .overgenerality import should_clarify
 
 
-def decide_turn_action(state, entropy: float, pool_size: int) -> str:
+def decide_turn_action(state, entropy: float, pool_size: int, low: float = 0.3) -> str:
+    """`low` defaults to should_clarify()'s own default but can be overridden -- Phase 2.3/2.5
+    (phase2/voi.py) adjusts it down when BM25/dense retrieval disagree, a live-computable ambiguity
+    signal independent of the fused score distribution's own entropy."""
     turns_left = state.turns_remaining
     if turns_left <= 1:
         return "commit"  # NFR-1, non-negotiable
     if pool_size == 0:
         return "commit"  # nothing to ask about either -- attach a (possibly empty) best-effort response
-    if not should_clarify(entropy, pool_size, turns_left):
+    if not should_clarify(entropy, pool_size, turns_left, low=low):
         return "commit"
     if pool_size <= 10:
         return "both"  # confident enough to show candidates AND still narrow further
