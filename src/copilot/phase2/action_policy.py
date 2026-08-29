@@ -9,17 +9,23 @@ condition this on the target rank, which the live agent never has access to.
 """
 from __future__ import annotations
 
-ENABLE_ACTION_POLICY = False  # Ablated on the 40-session validation split (wiki/08_evaluation_log.md):
+ENABLE_ACTION_POLICY = False  # Originally ablated on the 40-session validation split:
 # ON TechnicalScore=0.3693/HitRate@10=0.425/MRR=0.291 vs OFF (same commit) 0.4021/0.475/0.297 --
-# OFF wins clearly on every metric. The warm-started prior + within-session updates appear to
-# actively fight the already-calibrated entropy selector rather than complementing it, likely
-# exactly the cold-start noise D11 flagged (only ~3-6 real decisions per session). DISABLED.
-# RE-ABLATED after the Phase 2 codex review fixed two reward-tracking bugs (agent.py: the pool-size
-# snapshot was capped at rerank_depth, usually pool-size-invariant; a consumed ask's outcome was
-# never cleared and could replay against later unrelated pools) -- ON got WORSE, not better, once
-# the reward signal was fixed (0.3595/0.425/0.2616/7.575 vs the buggy run's 0.3693/0.425/0.291), so
-# the original "cut" verdict was not an artifact of broken measurement. Module kept for the
-# writeup's "tried, measured (twice), cut" record.
+# OFF appeared to win clearly on every metric. The warm-started prior + within-session updates
+# seemed to actively fight the already-calibrated entropy selector, matching the cold-start noise
+# D11 flagged (only ~3-6 real decisions per session).
+# RE-ABLATED TWICE: first after fixing two reward-tracking bugs (agent.py: the pool-size snapshot
+# was capped at rerank_depth, usually pool-size-invariant; a consumed ask's outcome was never
+# cleared and could replay against later unrelated pools) -- ON got worse, not better
+# (0.3595/0.425/0.2616/7.575), suggesting the cut verdict wasn't a measurement artifact. Then again
+# after Phase 3.1 uncovered a hash-seed nondeterminism bug elsewhere in the pipeline (catalog.py --
+# see phase2/voi.py's matching comment) that made the *baseline* OFF number itself unreliable: with
+# that fixed too, OFF=0.375938 vs ON=0.376509 -- a negligible (~0.0006, mixed-sign across
+# submetrics) difference, nothing like the large gaps originally reported. Net conclusion across
+# all three measurements: no configuration of this mechanism has ever shown a real win, and the a
+# priori cold-start-risk case against it (D11) still stands on its own merits regardless of the
+# exact reported margin. DISABLED. Module kept for the writeup's "tried, measured three times, cut"
+# record.
 
 # Warm-start prior: relative facet value, grounded in wiki/09's verified simulator mechanics
 # (budget/brand rarely survive the intent card's candidate slicing; material/color are the most

@@ -4,21 +4,30 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-30 (Phase 2 shipped, codex-reviewed, re-ablated, and closed out; proceeding to Phase 3)
+Last updated: 2026-08-30 (Phase 2 re-ablated after a reproducibility bug fix; mid-Phase-3.1; codex
+review + commit for this round still pending)
 
 ## Current phase
 
-**Phase 2 — DONE.** Three gated ablations on `phase2/`: VoI retriever-disagreement signal kept
-(modest, consistent win); multi-interest (K=2) cut (K=1 wins every metric, matches D3's a priori
-risk); contextual bandit cut (OFF wins every metric, matches D11's a priori cold-start risk).
-Codex review found 3 P2 findings in the bandit's reward-tracking (capped/pool-size-invariant
-signal, stale-outcome replay) plus a test order-dependency bug — all fixed, and the bandit
-ablation was honestly **re-run** with the fixed reward signal rather than assuming the original
-verdict still held: ON got *worse* (0.359 vs the buggy run's 0.369), confirming CUT was correct on
-the merits, not an artifact of broken measurement. **Full 200-session exit: TechnicalScore
-0.411066, HitRate@10 0.49, MRR 0.2866, MTTC 6.995 — up +0.6% from Phase 1's 0.408714.** Full
-detail in `wiki/03_design_log.md`'s 2026-08-30 entry and `wiki/08_evaluation_log.md`. User's
-standing `/goal`: continue through Phase 3 without stopping to ask, benchmarking at each phase.
+**Phase 2 — DONE, numbers corrected.** While starting Phase 3.1 (offline strategy tuning), the
+very first step surfaced a real bug: `catalog.py`'s BM25/metadata ranking and gazetteer lookups
+iterated plain Python `set`s whose order is hash-randomized per process, so the agent's behavior
+on the same deterministic simulator sessions was not actually reproducible run-to-run. Fixed at
+the source (sorted iteration, not an env-var workaround — see `wiki/03_design_log.md`'s full
+writeup). Because the bug's noise magnitude was comparable to several of Phase 2's reported
+ablation margins, honestly **re-ran all three Phase 2 ablations** with the fixed code: **VoI
+signal reversed from KEPT to CUT** (originally reported as a modest win; with determinism fixed,
+ON and OFF are byte-identical across all 200 dev sessions — the win was entirely a noise artifact);
+multi-interest and bandit stay CUT, now with cleaner, re-verified reasoning. **Corrected full
+200-session exit: TechnicalScore 0.40927, HitRate@10 0.49, MRR 0.278234, MTTC 6.96** — supersedes
+the earlier (buggy-measurement) 0.411066 number, though the aggregate is nearly unchanged at this
+sample size (the bug's impact was diluted by averaging over 200 sessions, even though it flipped
+conclusions at n=40). Full detail in `wiki/03_design_log.md`'s 2026-08-30 (cont.) "Phase 3.1:
+reproducibility bug" entry and `wiki/08_evaluation_log.md`.
+
+**Not yet done for this round** (in progress): commit these fixes, then per the two-tier review
+protocol run `codex exec review` against the diff before closing this out. User's standing
+`/goal`: continue through Phase 3 without stopping to ask, benchmarking at each phase.
 
 **Operational note**: evaluator runs launched via explicit background (`run_in_background: true`)
 were killed externally three times in a row during Phase 1 for unclear reasons; running in the

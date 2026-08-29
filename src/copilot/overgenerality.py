@@ -8,6 +8,8 @@ from __future__ import annotations
 import math
 from collections import Counter
 
+from .strategy_config import CLARIFY_BASE_LOW, CLARIFY_MIN_POOL_TO_BOTHER, CLARIFY_NO_ASK_AFTER_TURN
+
 DEFAULT_TEMPERATURE = 0.02  # starting point sized to RRF's ~1/60 scale; calibrate in Phase 1.3
 
 
@@ -27,8 +29,17 @@ def score_entropy(top_k_scores: list[float], temperature: float = DEFAULT_TEMPER
 
 
 def should_clarify(entropy: float, pool_size: int, turns_remaining: int,
-                    low: float = 0.3, high: float = 0.8,
-                    min_pool_to_bother: int = 4, no_ask_after_turn: int = 7) -> bool:
+                    low: float = CLARIFY_BASE_LOW,
+                    min_pool_to_bother: int = CLARIFY_MIN_POOL_TO_BOTHER,
+                    no_ask_after_turn: int = CLARIFY_NO_ASK_AFTER_TURN) -> bool:
+    # Phase 3.1 codex review (self-caught during the tuning refactor): this used to also accept a
+    # `high` parameter (default 0.8) that the function body never referenced -- dead since Phase 0,
+    # carried through unnoticed into implementation/04_SYSTEM_DESIGN.md's own pseudocode ("calibrate
+    # low/high against dev sessions" next to a `return entropy >= low` that never touches `high`).
+    # No design doc ever specified what an upper entropy ceiling should *do* (skip asking when
+    # already-maximal ambiguity means no single facet question would discriminate well? always ask
+    # in that regime instead?), so inventing behavior for it now would be speculative rather than a
+    # real fix. Removed rather than wired in with an unjustified guess.
     if turns_remaining <= (10 - no_ask_after_turn):
         return False
     if pool_size < min_pool_to_bother:

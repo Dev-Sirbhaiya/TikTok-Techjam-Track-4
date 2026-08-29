@@ -1,0 +1,13 @@
+{
+  "baseline": {},
+  "more_eager_clarify": {
+    "CLARIFY_BASE_LOW": 0.2,
+    "CLARIFY_MIN_POOL_TO_BOTHER": 3,
+    "CLARIFY_NO_ASK_AFTER_TURN": 8
+  },
+  "less_eager_clarify": {
+    "CLARIFY_BASE_LOW": 0.4,
+    "CLARIFY_MIN_POOL_TO_BOTHER": 6,
+    "CLARIFY_NO_ASK_AFTER_TURN": 6
+  }
+}

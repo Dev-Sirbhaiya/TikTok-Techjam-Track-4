@@ -13,9 +13,10 @@ what Phase 1.3 calibrates, not a second independent threshold here.
 from __future__ import annotations
 
 from .overgenerality import should_clarify
+from .strategy_config import CLARIFY_BASE_LOW
 
 
-def decide_turn_action(state, entropy: float, pool_size: int, low: float = 0.3) -> str:
+def decide_turn_action(state, entropy: float, pool_size: int, low: float = CLARIFY_BASE_LOW) -> str:
     """`low` defaults to should_clarify()'s own default but can be overridden -- Phase 2.3/2.5
     (phase2/voi.py) adjusts it down when BM25/dense retrieval disagree, a live-computable ambiguity
     signal independent of the fused score distribution's own entropy."""

@@ -195,9 +195,17 @@ def test_retriever_disagreement_no_overlap_is_one():
 
 
 def test_adjusted_clarify_threshold_lowers_bar_on_disagreement():
-    from copilot.phase2.voi import adjusted_clarify_threshold
-    assert adjusted_clarify_threshold(0.3, disagreement=1.0) < 0.3
-    assert adjusted_clarify_threshold(0.3, disagreement=0.0) == 0.3
+    import copilot.phase2.voi as voi
+    # Disabled by default post-re-ablation (see the module's own comment) -- force-enable to test
+    # the underlying mechanism itself, independent of the ablation's on/off decision. Matches the
+    # pattern already used by the action-policy test below.
+    original = voi.USE_DISAGREEMENT_SIGNAL
+    voi.USE_DISAGREEMENT_SIGNAL = True
+    try:
+        assert voi.adjusted_clarify_threshold(0.3, disagreement=1.0) < 0.3
+        assert voi.adjusted_clarify_threshold(0.3, disagreement=0.0) == 0.3
+    finally:
+        voi.USE_DISAGREEMENT_SIGNAL = original
 
 
 def test_multi_interest_k1_fallback_matches_single_ema():

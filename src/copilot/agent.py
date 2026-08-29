@@ -23,6 +23,7 @@ from .ranker import rerank
 from .rejection_memory import apply_rejection, apply_rejection_filter, detect_rejection_signal
 from .retrieval import retrieve_candidates
 from .state import DialogState
+from .strategy_config import CLARIFY_BASE_LOW, NEG_BOOST_WEIGHT
 from .turn_policy import decide_turn_action
 
 ATTRIBUTE_ENUM = [
@@ -97,7 +98,7 @@ class Agent:
             emb = self.catalog_index.embedding_for(c["parent_asin"])
             neg_boost = 0.0
             if state.pref_vector_neg is not None and emb is not None:
-                neg_boost = -0.10 * float((emb * state.pref_vector_neg).sum())
+                neg_boost = -NEG_BOOST_WEIGHT * float((emb * state.pref_vector_neg).sum())
             pos_boost = state.multi_interest.boost(emb) if state.multi_interest is not None else 0.0
             c["_score"] += pos_boost + neg_boost - c.get("_rejection_penalty", 0.0) * 0.05
 
@@ -126,7 +127,7 @@ class Agent:
 
         # Phase 2.3/2.5: retriever-disagreement-adjusted clarify threshold -- gated behind
         # phase2.voi.USE_DISAGREEMENT_SIGNAL, ablated before being trusted by default.
-        clarify_low = adjusted_clarify_threshold(0.3, disagreement)
+        clarify_low = adjusted_clarify_threshold(CLARIFY_BASE_LOW, disagreement)
         action = decide_turn_action(state, entropy, len(ranked), low=clarify_low)
 
         response: dict = {"message": "", "ask_attribute": None, "recommendations": []}

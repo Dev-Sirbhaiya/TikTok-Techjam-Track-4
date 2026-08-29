@@ -280,12 +280,15 @@ def score_entropy(top_k_scores: list[float], temperature: float = 0.02) -> float
     return h / math.log(k)
 
 def should_clarify(entropy: float, pool_size: int, turns_remaining: int,
-                    low=0.3, high=0.8, min_pool_to_bother=4, no_ask_after_turn=7) -> bool:
+                    low=0.3, min_pool_to_bother=4, no_ask_after_turn=7) -> bool:
     if turns_remaining <= (10 - no_ask_after_turn):     # hard turn-index ceiling
         return False
     if pool_size < min_pool_to_bother:                  # pool-size floor
         return False
-    return entropy >= low                               # calibrate low/high against dev sessions
+    return entropy >= low                               # Phase 3.1 tunes this systematically
+    # (Phase 3.1 self-correction: an earlier draft here also took a `high` parameter that was never
+    # referenced in the body -- dead since Phase 0. Removed in implementation, not wired in with
+    # invented semantics; see src/copilot/overgenerality.py's comment for the full reasoning.)
 
 def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str]) -> str | None:
     """CIKM'13 Probabilistic Entropy method: pick the facet whose value distribution over the

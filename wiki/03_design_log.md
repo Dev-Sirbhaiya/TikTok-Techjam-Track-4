@@ -287,7 +287,87 @@ also get logged here (with a link to the full report under `reviews/`).
   dropped (0.433→0.367) — flagged honestly, not chased further given n=30's noise floor (±3.3pp per
   session) and the clear net-positive elsewhere; a candidate for a future calibration look, not a
   blocker. Unaffected by the codex-review fixes above (bandit stays disabled in the shipped config).
+  **SUPERSEDED — see the 2026-08-30 (cont.) "Phase 3.1: reproducibility bug" entry below**: this
+  number was measured before a hash-seed nondeterminism bug was found and fixed; the corrected,
+  now-reproducible number is 0.40927, and the VoI signal (this run's one "kept" feature) turned out
+  to have zero real effect once the bug was fixed. Kept here for the historical record, not as the
+  current truth.
 - Proceeding to Phase 3 per the user's standing `/goal`.
+
+## 2026-08-30 (cont.) — Phase 3.1: reproducibility bug found and fixed, all three Phase 2 items re-ablated, one reversed
+
+While starting Phase 3.1 (offline strategy tuning — rollout/score/edit/validate over the
+train/validation split), the very first step (timing a clean baseline run, then running it again
+inside the round-1 tuning sweep) surfaced a serious bug: **running the identical config against the
+identical 160-session training split twice produced different TechnicalScores** (0.405035, then
+0.416775 for literally the same defaults). A follow-up on the faster 40-session validation split
+confirmed it wasn't a fluke (0.363217 vs 0.382717, still non-reproducible even after the first,
+partial fix below). Traced to Python's hash randomization: `set` iteration
+order is randomized per process (`PYTHONHASHSEED`) unless fixed, and several places in the retrieval
+path relied on a `set`'s iteration order without realizing it:
+- `catalog.build_gazetteer()`'s `colors`/`materials` vocabularies were plain sets; `nlu.py`'s
+  `_gazetteer_fallback_extract()` and `rejection_memory.py`'s `detect_rejection_signal()` both
+  iterate them with "first regex match wins, then stop" semantics — a message matching two gazetteer
+  terms (e.g. "no gold or silver") could silently extract a different one depending on process luck.
+- `catalog.CatalogIndex.bm25_search()` iterated `q_tokens` (a `set`) directly, so the
+  floating-point summation order feeding each candidate's BM25 score — and, more importantly, which
+  candidate got inserted into the `scores` dict first — depended on hash order, deciding tie-breaks
+  in the final `sorted()` differently across runs.
+- `catalog.CatalogIndex.metadata_rank()` iterated per-category/per-brand id `set`s the same way,
+  affecting `Counter.most_common()`'s tie-break order among equal-score candidates.
+- All three feed `retrieval.reciprocal_rank_fusion()`, which is itself deterministic *given*
+  deterministic inputs — so the bug was entirely upstream, in these three call sites.
+**This was NOT just a Phase 3.1 tooling problem — it meant the shipped agent's behavior on the
+frozen, deterministic customer simulator was itself non-deterministic**, a real risk for however
+official judging invokes the evaluator against the private 800-session set. Fixed at the source
+(not by setting `PYTHONHASHSEED` in a local test harness, which wouldn't protect the actual
+submission under an invocation this project doesn't control): gazetteer colors/materials are now
+sorted tuples; `bm25_search` iterates `sorted(q_tokens)`; `metadata_rank` iterates `sorted(ids)`.
+Verified fixed by running the identical config twice more — byte-identical results, both times.
+
+**Given the bug's noise magnitude (~2-4pp on the 40-session split) was comparable to or larger than
+several of Phase 2's reported ablation margins, honestly re-ran all three Phase 2 ablations with the
+fixed, now-deterministic code** rather than assuming the original verdicts still held:
+- **VoI retriever-disagreement signal** (previously "KEPT", a reported modest win): re-tested ON vs
+  OFF on both the validation split (n=40) AND the training split (n=160) — **byte-identical results
+  in both cases, 200 sessions total, zero difference to 6 decimal places**. The original "modest
+  win" was entirely a noise artifact of the nondeterminism bug, not a real effect. **Reversed to
+  CUT** — a null result doesn't earn a feature its keep.
+- **Multi-interest (K=2)** (previously "CUT", K=1 reportedly won every metric): re-tested on the
+  validation split — again byte-identical to K=1. Not a bug this time: `MultiInterestState` only
+  spawns a second hypothesis when cosine similarity drops below `SPAWN_THRESHOLD=0.35`, and
+  apparently no session in this dataset ever produces two positive-signal turns divergent enough to
+  cross it — consistent with D3's original a priori read that these sessions have one coherent
+  hidden target, not genuinely competing interests. Verdict **unchanged (CUT)**, but for a cleaner
+  reason: not "K=2 hurts", but "K=2 never has the opportunity to differ from K=1 on this data."
+- **Contextual bandit** (previously re-ablated once already after its own reward-tracking fix,
+  reporting ON=0.359 vs OFF=0.402 — a large gap): re-tested once more on the validation split with
+  the full determinism fix — ON=0.376509 vs OFF=0.375938, a negligible, mixed-sign difference.
+  Verdict **unchanged (CUT)** — no measurement of this mechanism, across three attempts, has ever
+  shown a real win, and D11's a priori cold-start-risk case stands on its own regardless of margin.
+- Fixed a resulting test bug: `test_adjusted_clarify_threshold_lowers_bar_on_disagreement` assumed
+  VoI's old enabled-by-default state; now force-enables the flag with save/restore, matching the
+  pattern already used for the other two gated mechanisms' unit tests.
+
+**Corrected Phase 2 exit result (full 200 sessions, all three items now disabled, deterministic
+code): TechnicalScore 0.40927, HitRate@10 0.49, MRR 0.278234, MTTC 6.96** — confirmed byte-identical
+to a second full run. Effectively unchanged from the original (buggy-measurement) 0.411066 at this
+sample size (large-n averaging diluted the bug's impact here, even though it was large enough to
+flip conclusions at n=40) — Phase 1→2's net trend holds, but the mechanism (VoI) is no longer part
+of the story; Phase 2 is now honestly a "tried three things, all three didn't earn their keep, net
+neutral vs. Phase 1" phase, not a "one small win" phase. This is a materially different, more
+accurate story for the eventual writeup, and a good example of why the pre-registration's
+train/validation discipline (and, now, a determinism check) matters.
+
+Also incidentally found and fixed during the same pass (self-caught, not from this bug):
+`overgenerality.should_clarify()` had a `high` parameter (default 0.8) that was never referenced in
+the function body — dead since Phase 0, carried unnoticed into `implementation/04_SYSTEM_DESIGN.md`'s
+own pseudocode. Removed rather than wired in with invented semantics (no design doc ever specified
+what an upper entropy ceiling should do). Also introduced `src/copilot/strategy_config.py`,
+centralizing the thresholds Phase 3.1 tunes (previously hardcoded literals scattered across
+`overgenerality.py`/`agent.py`/`phase2/voi.py`) behind env-var overrides, and
+`tools/tune_strategy.py`, a reusable rollout→score tool for Phase 3.1's actual sweep (still pending
+as of this entry — this reproducibility detour came first).
 
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 

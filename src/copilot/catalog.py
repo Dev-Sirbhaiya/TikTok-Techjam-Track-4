@@ -151,7 +151,19 @@ def build_gazetteer(products: dict[str, dict]) -> dict[str, set]:
     # mislabeled store/brand name than a genuine taxonomy node -- drop the long tail.
     categories = {c for c, n in category_counts.items() if n >= 5}
     brands = {b for b in brands if len(b) <= 40}
-    return {"brands": brands, "sizes": sizes, "materials": materials, "colors": colors, "categories": categories}
+    # "materials"/"colors" are deliberately tuples, not sets: nlu.py's _gazetteer_fallback_extract
+    # and rejection_memory.py's detect_rejection_signal both iterate them with "first regex match
+    # wins, then stop" semantics. A plain set's iteration order is hash-randomized per Python
+    # process (PYTHONHASHSEED) -- self-caught during Phase 3.1's tuning sweep, where two runs of the
+    # *identical* baseline config against the *identical* training split produced different
+    # TechnicalScores, traced to this: a message mentioning two gazetteer colors/materials (e.g. "no
+    # gold or silver") would silently extract a different one depending on which Python process
+    # happened to iterate the set which way, cascading into different retrieval/ranking/turn
+    # decisions for the rest of that session. Sorted alphabetically -- both vocabularies are flat,
+    # equally-specific single words (see MATERIAL_WORDS/COLOR_WORDS above), so there's no length- or
+    # specificity-based ordering to prefer; the only requirement is that it's fixed.
+    return {"brands": brands, "sizes": sizes, "materials": tuple(sorted(materials)),
+            "colors": tuple(sorted(colors)), "categories": categories}
 
 
 class CatalogIndex:
@@ -205,7 +217,14 @@ class CatalogIndex:
         full 200-session evaluator run impractically slow (self-caught before implementation, not
         by codex review)."""
         import math
-        q_tokens = set(tokenize(query_text))
+        # Sorted, not a bare set iteration: self-caught during Phase 3.1's tuning sweep (two runs of
+        # the identical config against the identical training split produced different
+        # TechnicalScores). A plain set's iteration order is hash-randomized per Python process --
+        # iterating query terms in a random order changes both the floating-point summation order
+        # feeding `scores[pid]` (non-associative rounding) AND which pid gets inserted into `scores`
+        # first, which is exactly what decides tie-breaking in the stable sort below. Sorting fixes
+        # both, deterministically, regardless of the process's hash seed.
+        q_tokens = sorted(set(tokenize(query_text)))
         if not q_tokens:
             return []
         k1, b = 1.5, 0.75
@@ -225,16 +244,21 @@ class CatalogIndex:
     def metadata_rank(self, slots: dict, top_n: int = 150) -> list[str]:
         if not slots:
             return []
+        # `sorted(ids)`/`sorted(...)` below, not bare set iteration: same class of bug as
+        # bm25_search's q_tokens (Phase 3.1 self-caught finding) -- each increment here is a fixed
+        # constant so the summed *values* are order-independent, but a plain set's hash-randomized
+        # iteration order still decides which pid is inserted into `scores` first, which decides
+        # `most_common()`'s stable-sort tie-break among equal-score pids downstream.
         scores: Counter[str] = Counter()
         category = slots.get("category")
         if category:
             for cat_name, ids in self._by_category.items():
                 if category.lower() in cat_name.lower() or cat_name.lower() in category.lower():
-                    for pid in ids:
+                    for pid in sorted(ids):
                         scores[pid] += 2.0
         brand = slots.get("brand")
         if brand and brand.lower() in self._by_brand:
-            for pid in self._by_brand[brand.lower()]:
+            for pid in sorted(self._by_brand[brand.lower()]):
                 scores[pid] += 2.0
         budget_max = slots.get("budget_max")
         if isinstance(budget_max, (int, float)):

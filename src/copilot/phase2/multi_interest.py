@@ -16,10 +16,20 @@ from typing import Optional
 
 import numpy as np
 
-ENABLE_MULTI_INTEREST = False  # Ablated on the 40-session validation split (wiki/08_evaluation_log.md):
-# K=2 TechnicalScore=0.3649/HitRate@10=0.425/MRR=0.283 vs K=1 (same commit) 0.3825/0.45/0.298 --
-# K=1 wins on every metric. Per the explicit governing rule ("if K=1 ties or wins, do not ship
-# K>1"), multi-interest is DISABLED. Module kept for the writeup's "tried, measured, cut" record.
+ENABLE_MULTI_INTEREST = False  # Originally ablated on the 40-session validation split
+# (wiki/08_evaluation_log.md): K=2 TechnicalScore=0.3649/HitRate@10=0.425/MRR=0.283 vs K=1 (same
+# commit) 0.3825/0.45/0.298 -- K=1 appeared to win on every metric.
+# RE-ABLATED after Phase 3.1 uncovered a hash-seed nondeterminism bug elsewhere in the pipeline
+# (see phase2/voi.py's matching comment). Once fixed, K=2 ON produced BYTE-IDENTICAL results to
+# K=1 on the 40-session validation split -- not because the mechanism is broken (the spawn logic
+# itself is unit-tested and does spawn given sufficiently divergent embeddings), but because no
+# session in this dataset ever produces two positive-signal turns divergent enough to cross
+# SPAWN_THRESHOLD=0.35: each session has one coherent hidden target, not genuinely competing
+# interests to disambiguate (exactly D3's original a priori assessment). The original "K=1 wins"
+# report was itself a noise artifact, not evidence K=2 actively hurts -- but the corrected finding
+# (K=2 never differs from K=1 on this data) makes the same governing rule apply even more cleanly:
+# no observed upside, ship the simpler K=1. Module kept for the writeup's "tried, measured, cut"
+# record.
 SPAWN_THRESHOLD = 0.35  # cosine similarity below which a turn's signal spawns a 2nd hypothesis
 K_MAX = 2
 
