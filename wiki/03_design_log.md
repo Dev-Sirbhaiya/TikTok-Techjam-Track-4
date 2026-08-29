@@ -158,6 +158,37 @@ also get logged here (with a link to the full report under `reviews/`).
 - Committed (`90d6501`); phase-level codex review and the real 200-session evaluator run were both
   kicked off in parallel — results in the next log entry.
 
+## 2026-08-29 (cont.) — Phase 0 CLOSED OUT: review triaged, fixes applied, honest benchmark comparison
+
+- Codex review of the full Phase 0 implementation (`wiki/reviews/phase0-implementation-2026-08-29.md`)
+  returned 7 real findings (4 P1, 3 P2), all fixed (`aa41ca2`), none declined: clarification declines
+  were being misread as rejections (corrupting ranking after every unproductive question); `feature`/
+  `style`/`size`/`use_case` facets were never populated so they could never be asked about; raw
+  per-item price unfairly dominated unnormalized entropy comparisons (fixed via bucketing AND a
+  general distinct-value-count cap, since the newly-populated `feature` facet would have reintroduced
+  the same problem with near-unique text); a cache-write failure discarded already-computed
+  embeddings, risking a full 50K-item recompute on every candidate lookup; forced overrides didn't
+  reset preference vectors; category indexing didn't comma-split the way the evaluator's own
+  `coarse_category()` does; and a word-boundary bug misclassified text like "Water Resistant" as
+  color=tan. 5 new regression tests added (26 total, all passing).
+- **Honest before/after benchmark, not just "reviewed, fixed, done"**: the pre-fix run scored
+  TechnicalScore 0.353; the post-fix run scored 0.328 — a real, measured *drop*, driven mainly by the
+  buying scenario (0.3625→0.3125 HitRate@10) while intent_override *improved* as expected (0.367→0.4,
+  matching the preference-vector-reset fix). Kept the fixes anyway: all 7 are genuine correctness bugs
+  verified independently of their score effect, and shipping known-wrong behavior because it happened
+  to score higher on this one 200-sample dev set would be reward-hacking this specific sample, not
+  building a system that generalizes to the private 800-session set's different products. Flagged the
+  buying-track regression explicitly as a Phase 1.3 calibration target (`wiki/08_evaluation_log.md`)
+  rather than either hiding it or reverting correct fixes to chase a number.
+- **Phase 0 exit criteria met**: TechnicalScore 0.328 clears both the pre-registered floor (beat
+  baseline's 0.107) and stretch target (≥0.25) from `implementation/10_PRE_REGISTRATION.md`, on all
+  200 public dev sessions, no crashes. Treating the single comprehensive review already run (which
+  covered the entire Phase 0 diff from scratch) as satisfying the phase-level review requirement,
+  given it was run against the accumulated implementation, not an individual step — no separate
+  redundant third review before moving on, per the user's explicit direction to keep iterating.
+- User set a broader `/goal`: continue directly through Phase 1, 2, 3 (each with its own codex
+  review + benchmark), not stopping to ask between phases. Proceeding to Phase 1 next.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside

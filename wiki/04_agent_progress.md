@@ -23,11 +23,14 @@ things stand.
 | Two-tier codex review wiring (per-step + per-phase) in build plan + CLAUDE.md | main session | done | 2026-08-29 | 2026-08-29 | — |
 | Frontend visualization design + published prototype ("Embedding Explorer") | main session | done | 2026-08-29 | 2026-08-29 | `implementation/13_FRONTEND_VISUALIZATION.md`; real Three.js build is optional/time-permitting, not on critical path |
 | Architecture-synthesis codex review + full triage (7 findings, all fixed) | main session | done | 2026-08-29 | 2026-08-29 | see `wiki/reviews/architecture-synthesis-2026-08-29.md` |
-| Phase 0 implementation (src/copilot/: state, catalog, nlu, intent_router, retrieval, rejection_memory, preference, overgenerality, ranker, turn_policy, agent, logging, phrasing, tools/install_shim.py, tools/run_eval.py) | main session | in progress | 2026-08-29 | — | full evaluator run against 200 dev sessions + phase-level codex review + closeout |
-| Pillar I — Intent routing & hybrid retrieval pipeline | main session | in progress | 2026-08-29 | — | code written (`intent_router.py`, `retrieval.py`, `catalog.py`), pending full-loop evaluator validation |
-| Pillar II — Dialog state machine & clarification | main session | in progress | 2026-08-29 | — | code written (`state.py`, `nlu.py`, `rejection_memory.py`, `overgenerality.py`), 19 unit tests passing |
-| Pillar III — Context distillation & adaptive orchestration | main session | in progress | 2026-08-29 | — | code written (`preference.py`); orchestrator kept as inline decision functions for Phase 0, not a separate state-machine module yet |
-| Pillar IV — Evaluator integration & metrics tracking | main session | in progress | 2026-08-29 | — | `tools/install_shim.py` + `tools/run_eval.py` written and shim-import verified; awaiting full 200-session run |
+| **Phase 0 implementation + closeout** (src/copilot/ full hybrid agent, 26 unit tests, 2 codex reviews fully triaged, real 200-session evaluator numbers) | main session | **done** | 2026-08-29 | 2026-08-29 | TechnicalScore 0.328 (3.1x baseline) — see `wiki/08_evaluation_log.md`; buying-track calibration flagged for Phase 1.3 |
+| Pillar I — Intent routing & hybrid retrieval pipeline | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | validated end-to-end against 200 sessions |
+| Pillar II — Dialog state machine & clarification | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | 26 unit tests passing, validated end-to-end |
+| Pillar III — Context distillation & adaptive orchestration | main session | done (Phase 0), Phase 1.4 pending | 2026-08-29 | 2026-08-29 | preference vectors done; named adaptive state machine deferred to Phase 1.4 |
+| Pillar IV — Evaluator integration & metrics tracking | main session | done (Phase 0) | 2026-08-29 | 2026-08-29 | `tools/run_eval.py` is the standing "one command to run" |
+| Phase 1 — cheap refinements + calibration (1.1-1.4) | main session | not started | — | — | next up, per `status.md` — includes the buying-track calibration flagged above |
+| Phase 2 — gated ablations (multi-interest, bandit, VoI) | unassigned | not started | — | — | per user's continue-iterating directive, attempted after Phase 1 |
+| Phase 3 — offline tuning + comparative feedback | unassigned | not started | — | — | per user's continue-iterating directive |
 | Submission packaging (README, demo video, Devpost writeup) | unassigned | not started | — | — | scheduled as Phase 5, `implementation/05_BUILD_PLAN.md` |
 
 ## Status legend
