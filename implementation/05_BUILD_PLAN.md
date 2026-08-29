@@ -4,17 +4,44 @@ Supersedes `/My Ideas/02_BUILD_PLAN.md` + `08_ADVANCED_PHASES.md`, merged into o
 and corrected against ground truth. **Today is 2026-08-29 — the 72-hour build window is open (closes
 2026-09-01 12:00).**
 
-## How phase execution maps to `CLAUDE.md`'s enforcement loop
+## How phase execution maps to `CLAUDE.md`'s enforcement loop — TWO TIERS of codex review
 
 **Each numbered step below (e.g. `0.3`, `1.2`) is one "work phase" per `CLAUDE.md` §3.** Completing a
 step triggers, automatically, without being asked again: (a) an immediate git commit, (b) a background
-`codex exec review` kicked off without blocking further work, (c) a living-wiki update
-(`wiki/03_design_log.md`, `wiki/04_agent_progress.md`, `wiki/05_completed_components.md`,
-`wiki/08_evaluation_log.md` when the evaluator is run, `status.md`'s Next Workstream). Saying **"run
-Phase 0"** means: execute 0.1 → 0.11 in order, each triggering that loop, stopping at the Phase 0 exit
-criteria to report actual numbers before continuing (do not silently roll into Phase 1). Saying **"run
-0.4"** means just that one step. No further instruction is needed for the review/commit/wiki loop to
-happen — it is not optional and does not need to be re-requested per step.
+`codex exec review` scoped to just that step's diff, kicked off without blocking further work, (c) a
+living-wiki update (`wiki/03_design_log.md`, `wiki/04_agent_progress.md`,
+`wiki/05_completed_components.md`, `wiki/08_evaluation_log.md` when the evaluator is run, `status.md`'s
+Next Workstream).
+
+**On top of that, every named Phase (Phase 0, Phase 1, Phase 2, ...) gets a second, broader review when
+it finishes** — `codex exec review --base <SHA of the phase's first step's parent commit>` over the
+**entire phase's accumulated diff**, not just the last step. Step-level reviews catch local bugs;
+this phase-level pass is what catches integration issues that only show up once several steps combine
+(e.g. a Phase 0 step 0.9 change that subtly breaks an assumption step 0.4 made). Each phase section
+below ends with a **"Phase exit codex review"** line naming the exact base commit/title to use.
+
+### The full phase-closeout sequence (automatic — do not wait to be asked per phase)
+
+1. Run the phase-level codex review above.
+2. **Triage every finding** — fix it (small commit referencing the review) or explicitly decline it
+   with a one-line reason. No finding silently dropped, same rule as step-level reviews.
+3. **Update the living wiki, and explicitly highlight what the review found** — not just "reviewed,
+   no issues": `wiki/03_design_log.md` gets a dated entry naming each finding from the phase-level
+   review, its severity/category, and whether it was fixed or declined (and why); if any finding
+   changed the design, `wiki/01_architecture.md`/`wiki/02_design_decisions.md` get updated too;
+   `wiki/04_agent_progress.md` marks the phase's row done; `wiki/08_evaluation_log.md` gets this
+   phase's exit-criteria numbers.
+4. **Commit the phase closeout** — one commit covering the wiki updates from step 3 (and any small
+   review-driven fixes from step 2 not already committed individually), message format
+   `"phase-closeout: Phase N — <one-line summary of what shipped + review outcome>"`.
+5. Only then report the phase's exit-criteria numbers and move on.
+
+Saying **"run Phase 0"** means: execute 0.1 → 0.11 in order (step-level review after each), then run
+this full 5-step closeout sequence, then stop to report actual evaluator numbers before continuing (do
+not silently roll into Phase 1). Saying **"run 0.4"** means just that one step (with its own step-level
+review — the phase-closeout sequence only runs when a *named phase* completes, not every step). No
+further instruction is needed for either tier's loop to happen — it is not optional and does not need
+to be re-requested per step or per phase.
 
 ## The one rule that governs every phase past Phase 1
 
@@ -135,6 +162,11 @@ minimum** (target: meaningfully above 0.125 HitRate@10 and below 9.81 MTTC — e
 are set in `10_PRE_REGISTRATION.md` before this phase starts, not adjusted afterward to fit whatever
 number comes out).
 
+**Phase 0 exit codex review**: `codex exec review --base <SHA immediately before step 0.1's first
+commit> --title "Phase 0 exit: full hybrid-retrieval floor"`, then the full phase-closeout sequence
+above (triage → wiki update highlighting findings → phase-closeout commit) before reporting the
+exit-criteria numbers.
+
 ---
 
 ## Phase 1 — Cheap, high-confidence refinements (immediately after Phase 0 passes)
@@ -150,9 +182,16 @@ Confirm `overgenerality.py`'s pool-reduction computation is exactly the entropy 
 `04_SYSTEM_DESIGN.md` (not an approximation) — matters for the writeup's rigor, not just correctness.
 
 ### 1.3 — Threshold calibration pass
-Systematically sweep `base_threshold`/`decay_rate` (turn policy) and `low`/`high` (entropy gate)
-against the 200 dev sessions; record the sweep results (not just the winning values) in
-`wiki/08_evaluation_log.md` for the writeup's ablation narrative.
+**CORRECTED per codex review** (`wiki/reviews/architecture-synthesis-2026-08-29.md`): the original
+draft swept thresholds against all 200 dev sessions with no held-out check — `10_PRE_REGISTRATION.md`
+already commits to a train/validation split "for Phase 3.1 offline tuning and Phase 2/3 ablations,"
+but a manual grid sweep here is exactly the same failure mode (selecting configuration and reporting
+its score on the same data). **Fix, applied now**: create the deterministic 160/40 `sample_id`-hash
+split from `10_PRE_REGISTRATION.md` *before* this step (moved earlier than originally scoped — see
+that doc's updated scope), sweep `base_threshold`/`decay_rate` (turn policy) and `low`/`high` (entropy
+gate) against the 160-session training split only, then report the winning configuration's numbers on
+the untouched 40-session validation split. Record both the full sweep (training split) and the final
+validation-split numbers in `wiki/08_evaluation_log.md` — not just the winning training-split values.
 
 ### 1.4 — Adaptive orchestrator polish (FR-8 completion)
 Add the remaining named adaptive branch points from `research/07`'s recommendation: skip-rerank on
@@ -162,6 +201,9 @@ weighting by buying-intent specificity. Log every routing decision + triggering 
 
 **Phase 1 exit criteria**: no metric regressions vs. Phase 0's exit numbers on any of the three core
 metrics; calibrated thresholds logged with their sweep evidence.
+
+**Phase 1 exit codex review**: `codex exec review --base <SHA at Phase 0's phase-closeout commit> --title
+"Phase 1 exit: calibration + orchestrator polish"`, then the phase-closeout sequence above.
 
 ---
 
@@ -183,6 +225,13 @@ Only build if a genuinely live-computable proxy is defined (retrieval-confidence
 disagreement — see Phase 2.5 step 1). **Never** compute this against the ground-truth target rank,
 which the live agent never has access to (`06_DECISION_LOG.md` D6/D7).
 
+**Phase 2 exit codex review**: `codex exec review --base <SHA at Phase 1's phase-closeout commit>
+--title "Phase 2 exit: gated ablations (multi-interest, bandit, VoI)"`, then the phase-closeout
+sequence above. Since every item here is individually ablation-gated already, this review's job is
+specifically to check for cross-item interference (e.g. the bandit and multi-interest layers both
+mutating shared state in ways that confound each other's ablation) — highlight any such interference
+found as its own line in the wiki update, not folded into a generic "reviewed" note.
+
 ---
 
 ## Phase 2.5 — Cheap refinements to Phase 2 (bundle into 2.1-2.3's work, not separate builds)
@@ -194,6 +243,9 @@ which the live agent never has access to (`06_DECISION_LOG.md` D6/D7).
 - **Product-belief distribution framing**: maintain ranked candidates as a normalized probability-like
   distribution updated incrementally, rather than fully recomputed each turn — an implementation
   cleanliness upgrade, not new capability.
+
+**Phase 2.5 exit codex review**: `codex exec review --base <SHA at Phase 2's phase-closeout commit>
+--title "Phase 2.5 exit: refinements"`, then the phase-closeout sequence above.
 
 ---
 
@@ -211,6 +263,12 @@ path as any other turn. Apply a Rocchio-style update, **bounded and positive-hea
 literature on query drift (`research/06` cross-ref; `/My Ideas/` D9): high weight on original signal,
 small positive-feedback weight, near-zero/heavily-damped negative term, cap feedback at k≤5.
 
+**Phase 3 exit codex review**: `codex exec review --base <SHA at Phase 2.5's phase-closeout commit>
+--title "Phase 3 exit: offline tuning + comparative feedback"`, then the phase-closeout sequence
+above — pay particular attention to whether 3.1's offline tuning loop leaked validation-split data
+into training (a specific, checkable failure mode per `10_PRE_REGISTRATION.md`); highlight it
+explicitly in the wiki if found, don't just note "passed review."
+
 ---
 
 ## Phase 3.5 — Moderate new additions (after Phase 3's core works)
@@ -223,6 +281,10 @@ small positive-feedback weight, near-zero/heavily-damped negative term, cap feed
 - **Counterfactual/synthetic rollout augmentation** (extends 3.1): only if the evaluator is confirmed
   genuinely replayable with counterfactual actions — verify against the actual evaluator source before
   investing time (we have this source locally now — check before building, not after).
+
+**Phase 3.5 exit codex review**: `codex exec review --base <SHA at Phase 3's phase-closeout commit>
+--title "Phase 3.5 exit: hedging, calibration, synthetic rollouts"`, then the phase-closeout sequence
+above.
 
 ---
 
@@ -243,6 +305,12 @@ Everything here stays inside a 1-2 step hand-built heuristic lookahead.
 **Mandatory gate**: ablate the full system with vs. without Phase 4, bar set higher than earlier gates
 (diminishing returns are likely by construction over an already-good 1-step heuristic).
 
+**Phase 4 exit codex review**: `codex exec review --base <SHA at Phase 3.5's phase-closeout commit>
+--title "Phase 4 exit: world-model-lite cluster"`, then the phase-closeout sequence above — given
+this phase's explicitly higher risk bar, treat any review finding about hidden ground-truth leakage
+into the live planning path (the exact D6/D7 bug class) as a highlighted, must-fix item, not a
+declinable one.
+
 ---
 
 ## Phase 5 — Submission packaging (new phase, not in `/My Ideas/` — closes the loop on deliverables)
@@ -251,15 +319,32 @@ Everything here stays inside a 1-2 step hand-built heuristic lookahead.
 Run the evaluator one final time against all 200 dev sessions with the final shipped configuration;
 this is the headline number set for the written report.
 
-### 5.2 — Package `submission/` per `docs/submission_rules.md`
+### 5.2 — Package `submission/` per `docs/submission_rules.md`, including offline model artifacts
 Copy `src/copilot/` into `submission/src/`, write the top-level `submission/agent.py` re-export,
 `requirements.txt`, and confirm the recommended layout matches exactly.
+
+**CORRECTED per codex review**: the original draft only mentioned source + `requirements.txt`, which
+is insufficient — `docs/submission_rules.md` warns final scoring may run with **network access
+disabled**, and the guaranteed-path cross-encoder (`ms-marco-MiniLM-L-6-v2`) and dense encoder
+(`bge-small-en-v1.5`) are Hugging Face models that `sentence-transformers` will otherwise try to
+download on first use, failing before the agent can respond at all. Concretely, one of:
+1. **Bundle the model weights** in `submission/models/` (both models together are well under 200MB)
+   and load explicitly from that local path rather than a bare model-ID string that implies a
+   download; document this path in the README.
+2. **Or** provide a tested, explicit prefetch step (`python tools/prefetch_models.py`, populating the
+   local `sentence-transformers` cache) as a documented, verified-working part of setup — verify by
+   actually testing a run with network disabled (e.g. `HF_HUB_OFFLINE=1`) before trusting this path,
+   not just documenting it optimistically.
+This must be tested, not assumed, before Phase 5.3's reproducibility check — add "run once with
+network access disabled" as an explicit item in that step.
 
 ### 5.3 — README + reproducibility check
 Project overview, setup/install steps, exact run command, disclosed model choice/cost/latency/offline-
 fallback, limitations & what you'd improve with more time, contribution breakdown. Actually re-run the
 documented steps from a clean checkout to confirm reproducibility (submission rules: failing this "may
-be treated as invalid").
+be treated as invalid") — **including one run with network access disabled**, per 5.2's offline-model
+fix, since "may run with network access disabled" is stated explicitly in `docs/submission_rules.md`
+and should be verified, not assumed.
 
 ### 5.4 — Demo video
 Walkthrough of inference/API usage across at least one full multi-turn session (no UI required — the
@@ -269,6 +354,11 @@ linked from Devpost.
 ### 5.5 — Devpost written submission
 Approach, tools, APIs, libraries, datasets — cross-reference `02_TECHNICAL_PRD.md`'s deliverable
 checklist so nothing is missed.
+
+**Phase 5 exit codex review**: `codex exec review --base <SHA at Phase 4's phase-closeout commit
+(or the last completed phase's, if Phase 4 wasn't attempted)> --title "Phase 5 exit: submission
+packaging"`, then the phase-closeout sequence above — this is the final review before submission;
+triage everything, no findings left open.
 
 ---
 

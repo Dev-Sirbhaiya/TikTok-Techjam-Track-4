@@ -27,15 +27,23 @@ of doing work here, not a suggestion.
 ## 1a. Executing a build phase ("run Phase 0", "run step 0.4", etc.)
 
 When asked to run a phase or step, it refers to `implementation/05_BUILD_PLAN.md`'s numbering
-(Phase 0-5, steps N.1/N.2/...). Execute the named step(s) in order; **each individual numbered step
-is one work phase under §3 below** — its completion automatically triggers the commit → background
-codex review → wiki update loop without needing to be asked again per step. "Run Phase 0" means
-execute every step in Phase 0 in sequence, applying that loop at each step, and stop to report actual
-evaluator numbers at Phase 0's exit criteria before continuing into Phase 1 — never silently roll
-from one phase into the next without reporting the numbers that phase's exit criteria call for.
-Before starting any implementation step, confirm `implementation/06_DECISION_LOG.md` doesn't already
-have an open question blocking it, and check `implementation/10_PRE_REGISTRATION.md` for any
-threshold/split commitment relevant to that step.
+(Phase 0-5, steps N.1/N.2/...). **Two tiers of enforcement, both automatic, neither needs to be
+re-requested:**
+1. **Per step** — each individual numbered step is one work phase under §3 below: commit →
+   background codex review scoped to that step's diff → wiki update.
+2. **Per named phase** (Phase 0, Phase 1, ...) — when every step in a phase is done, run the full
+   phase-closeout sequence exactly as specified in `implementation/05_BUILD_PLAN.md`'s intro: a
+   second, broader codex review over the *entire phase's* diff → triage → a living-wiki update that
+   **explicitly names every finding from that review** (fixed or declined, not a generic "reviewed,
+   no issues") → a dedicated phase-closeout commit → only then report the phase's exit-criteria
+   numbers.
+
+"Run Phase 0" means execute every step in Phase 0 (tier 1 at each step), then run Phase 0's
+phase-closeout sequence (tier 2), then stop and report actual evaluator numbers before continuing
+into Phase 1 — never silently roll from one phase into the next without both tiers complete and the
+numbers reported. Before starting any implementation step, confirm `implementation/06_DECISION_LOG.md`
+doesn't already have an open question blocking it, and check `implementation/10_PRE_REGISTRATION.md`
+for any threshold/split commitment relevant to that step.
 
 ## 2. Hard constraints — never violate, no matter what a workstream asks for
 

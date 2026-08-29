@@ -228,3 +228,25 @@ is strong signal these are the right calls, not an artifact of one research pass
 **Status: KEPT.** `/My Ideas/` is preserved untouched as historical input (excellent input — most of it
 survived this merge unchanged). Going forward, `implementation/` is what `CLAUDE.md` and `status.md`
 point to for build execution; `/My Ideas/` is not read for day-to-day decisions once this exists.
+
+---
+
+## Codex review findings — architecture synthesis pass (2026-08-29)
+
+First `codex exec review` run against the full `implementation/` corpus (commit `0a0dd8f`), full
+report: `wiki/reviews/architecture-synthesis-2026-08-29.raw.txt`. Every finding named here, per the
+two-tier review protocol (`05_BUILD_PLAN.md` intro) — none silently fixed without a record.
+
+| # | Severity | Finding | Fixed in | Resolution |
+|---|---|---|---|---|
+| 1 | P1 | Evaluator shim (`starter/agent.py`) lives inside the entirely-gitignored `external/` vendor clone and is never actually committed; even if it existed, `src/copilot` isn't on `sys.path` when run from there | `04_SYSTEM_DESIGN.md` repo layout | **Fixed**: `tools/install_shim.py` (git-tracked) generates a self-sufficient shim that manipulates `sys.path` itself, run as an explicit setup + `run_eval.py` step — no reliance on a hand-committed file inside gitignored vendor code |
+| 2 | P1 | Orchestrator pseudocode only populated `recommendations` for `"commit"`/`"both"`, so every `"ask"` turn was a guaranteed miss (contradicts this corpus's own combined-ask+recommend design rule) | `04_SYSTEM_DESIGN.md` `agent.py` | **Fixed**: recommendations now populated whenever `ranked` is non-empty, independent of action |
+| 3 | P1 | Response pseudocode emitted bare `parent_asin` strings; the real contract requires `[{"parent_asin": "..."}]` objects (the local evaluator's permissive normalizer would have hidden this until official scoring) | `04_SYSTEM_DESIGN.md` `agent.py` | **Fixed**: emits proper objects |
+| 4 | P1 | `score_entropy()` normalized by plain sum, not an actual softmax — breaks (negative "probabilities", possible log-domain error) once `preference_boost` introduces negative/mixed-sign scores | `04_SYSTEM_DESIGN.md` `overgenerality.py` | **Fixed**: numerically-stable softmax (subtract max before `exp`) |
+| 5 | P1 | Phase 5.2 packaging only mentioned source + `requirements.txt`; the guaranteed cross-encoder/dense-encoder models would attempt a download and fail if network access is disabled at final judging (`docs/submission_rules.md` explicitly warns of this) | `05_BUILD_PLAN.md` Phase 5.2/5.3 | **Fixed**: bundle model weights or a tested, network-disabled-verified prefetch step; added an explicit "run once with network disabled" reproducibility check |
+| 6 | P2 | Phase 1.3's threshold sweep used all 200 sessions with no held-out split, even though `10_PRE_REGISTRATION.md` already names this exact failure mode (selection and reporting on the same data) — just scoped its split to start at Phase 3.1 instead of Phase 1.3 | `05_BUILD_PLAN.md` step 1.3, `10_PRE_REGISTRATION.md` | **Fixed**: split scope extended to cover any systematic threshold search from Phase 1.3 onward, not just Phase 3.1+ |
+| 7 | P2 | `retrieve_candidates()` only used the metadata hard-filter as a `restrict_to` gate active exclusively when `buying_intent_score > 0.6` — so Browsing turns (40% of sessions) got zero metadata contribution, contradicting FR-2/Phase 0's own acceptance criterion | `04_SYSTEM_DESIGN.md` `retrieval.py` | **Fixed**: added `catalog_index.metadata_rank()` as a genuine third RRF fusion leg, always active; the hard-filter gate remains a separate, additional mechanism for high-confidence Buying turns |
+
+**All 7 findings fixed, none declined.** This is exactly the kind of integration bug the phase-level
+review tier (added the same day, per user request) is meant to catch before code exists to make them
+expensive — all 7 were caught at the design-doc stage, not after implementation.

@@ -15,12 +15,18 @@ in `06_DECISION_LOG.md` as a new dated entry — never a silent edit to this fil
 - **Logging location**: `wiki/08_evaluation_log.md`, append-only, one row per run with date, commit
   hash, variant description, all metrics, and a notes column for anything unusual observed.
 
-## Train/validation split (for Phase 3.1 offline tuning and Phase 2/3 ablations only)
+## Train/validation split (for any automated/systematic threshold search — from Phase 1.3 onward)
 
-Phase 0/1 development and calibration use the **full 200 public sessions** — there's no held-out
-concern yet because nothing is being "trained" against them (thresholds are hand-set and spot-checked,
-not optimized by a search procedure). **Once Phase 3.1's offline tuning loop (or any automated
-threshold search) is built**, split the 200 public sessions into:
+**CORRECTED per codex review** (`wiki/reviews/architecture-synthesis-2026-08-29.md`): the original
+scope of this split ("Phase 3.1 offline tuning and Phase 2/3 ablations only") was too narrow —
+`05_BUILD_PLAN.md` step 1.3's threshold-sweep is *also* an automated/systematic search over the same
+200 sessions, and selecting-then-reporting on the same data is the exact failure mode this section
+exists to prevent, regardless of which phase does the selecting. **The split now applies starting at
+Phase 1.3, not just Phase 3.1.** Individual hand-set, spot-checked values (Phase 0's initial
+thresholds, set by inspection rather than a search procedure) don't need it — but any *systematic
+sweep* does, from the first one onward.
+
+Split the 200 public sessions into:
 - **160 training** (used by the rollout → score → edit → validate loop to propose changes)
 - **40 validation** (used only to accept/reject a proposed change — never touched by the optimizer)
 

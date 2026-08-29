@@ -4,17 +4,20 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-29 (architecture decided, implementation corpus complete, ready to build)
+Last updated: 2026-08-29 (architecture decided + reviewed + corrected, implementation corpus complete)
 
 ## Current phase
 
-**Architecture & planning — complete. Zero implementation code written yet.** Challenge window is
-open (2026-08-29 12:00 → 2026-09-01 12:00). The user's own `/My Ideas/` design pass was reviewed,
-cross-checked against `research/DOS_AND_DONTS.md` and verified ground truth, and merged into
-`implementation/` — a 12-document corpus (problem framing, PRD, system architecture + diagram, system
-design + pseudocode, phased build plan numbered 0.1-5.5, decision log resolving every open question,
-risk register, ablation matrix, supervisor questions, pre-registration, future work, build memo).
-`implementation/00_INDEX.md` is the entry point.
+**Architecture & planning — complete and codex-reviewed. Zero implementation code written yet.**
+Challenge window is open (2026-08-29 12:00 → 2026-09-01 12:00). The user's own `/My Ideas/` design pass
+was reviewed, cross-checked against `research/DOS_AND_DONTS.md` and verified ground truth, and merged
+into `implementation/` — now a 14-document corpus (problem framing, PRD, system architecture + diagram,
+system design + pseudocode, phased build plan numbered 0.1-5.5 with a two-tier per-step + per-phase
+codex-review protocol, decision log resolving every open question, risk register, ablation matrix,
+supervisor questions, pre-registration, future work, build memo, and a frontend visualization spec with
+a published interactive prototype). `codex exec review` ran against the full corpus and found 7 real
+issues (5 P1, 2 P2) — all fixed directly in the design docs; see
+`wiki/reviews/architecture-synthesis-2026-08-29.md`. `implementation/00_INDEX.md` is the entry point.
 
 ## Next workstream
 
@@ -57,6 +60,16 @@ gated Phase 2+ work to push given the real clock).
   step N.M" map unambiguously to `implementation/05_BUILD_PLAN.md` with the enforcement loop
   automatic. Updated `wiki/01_architecture.md` and `wiki/02_design_decisions.md` (DD-002) to point to
   it. See `wiki/03_design_log.md` for full detail.
+- 2026-08-29 — **Two-tier codex review + Embedding Explorer visualization.** Added an explicit
+  phase-level codex review (on top of the existing per-step review) to `05_BUILD_PLAN.md` and
+  `CLAUDE.md` §1a, with a mandatory phase-closeout sequence (review → wiki update naming every
+  finding → dedicated commit) — user-requested. Designed and published an interactive "Embedding
+  Explorer" demo/debug visualization (3D embedding space + dialog state + retrieval funnel;
+  explicitly not part of the scored path) — `implementation/13_FRONTEND_VISUALIZATION.md`.
+- 2026-08-29 — **Architecture-synthesis codex review completed and fully triaged**: 7 findings (5 P1,
+  2 P2), all fixed, none declined, caught before any implementation code exists. See
+  `wiki/reviews/architecture-synthesis-2026-08-29.md` and `implementation/06_DECISION_LOG.md`'s
+  "Codex review findings" section for full detail.
 
 ## Open questions / decisions needed from the user
 

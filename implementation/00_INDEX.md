@@ -34,6 +34,7 @@ do not need to ask for that separately.
 | 10 | [Pre-Registration](10_PRE_REGISTRATION.md) | Eval protocol, train/validation split, and success thresholds committed *before* building, to prevent post-hoc metric shopping |
 | 11 | [Future Work](11_FUTURE_WORK.md) | Speculative/stretch ideas (world-model-lite, etc.) explicitly out of the committed build |
 | 12 | [Build Memo](12_BUILD_MEMO.md) | One-page narrative summary — read this if you only read one file |
+| 13 | [Frontend Visualization](13_FRONTEND_VISUALIZATION.md) | The "Embedding Explorer" demo/debug tool — 3D embedding space + dialog state + retrieval funnel. Not part of the scored path. Includes a link to a live interactive prototype. |
 
 ## Relationship to other folders
 

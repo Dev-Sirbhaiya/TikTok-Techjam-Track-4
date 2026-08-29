@@ -132,3 +132,39 @@ also get logged here (with a link to the full report under `reviews/`).
 - No implementation code written yet — this was architecture/planning synthesis only, per the explicit
   build-order discipline both idea sources and our own research converge on (floor first, ambitious
   ideas ablation-gated).
+
+## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
+
+- User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside
+  `implementation/05_BUILD_PLAN.md` itself, with wiki updates that **name every finding** from a
+  phase-level review (not a generic "reviewed, no issues"), followed by a dedicated phase-closeout
+  commit. Added this as a documented "two-tier" system: per-step review (already existed) + a broader
+  phase-exit review over the whole phase's diff, both wired into every phase section (0 through 5) and
+  synced into `CLAUDE.md` §1a so the two docs don't drift apart.
+- User asked why MIND/ComiRec weren't included — clarified: they ARE in `06_DECISION_LOG.md` D3
+  (carried from `/My Ideas/`'s own D3, gated Phase 2 multi-interest vectors), but our own independent
+  9-file research pass (`research/06`) didn't surface them on its own — a real gap in our research that
+  the user's ideas folder filled, acknowledged honestly rather than overclaimed.
+- User asked for a detailed, polished frontend/visualization document — a demo/debug tool to show
+  embedding space in 3D plus dialog state, explicitly **not** part of the scored path (competition
+  excludes UI/UX from evaluation). Loaded the `artifact-design` skill and built a published, interactive
+  prototype ("Embedding Explorer") with synthetic data proving the interaction design: an orbiting 3D
+  point-cloud of the catalog's embedding space (category-colored, thread-lines to nearest candidates,
+  optional dev-only ground-truth overlay), plus dialog-state pills, a turn timeline, an entropy gauge,
+  preference-vector sparklines, and a retrieval funnel. Design language: boutique-dark palette (brass/
+  gold accent nodding to the catalog's Jewelry vertical), Fraunces/Work Sans/JetBrains Mono type system.
+  Documented in new `implementation/13_FRONTEND_VISUALIZATION.md`, including the real (non-artifact-
+  constrained) build plan using Three.js + a PCA export script, explicitly placed outside
+  `05_BUILD_PLAN.md`'s numbered critical path (optional, time-permitting, does not compete with Phase
+  0-3 build time).
+- **Architecture-synthesis codex review landed and was fully triaged**: 7 findings (5 P1, 2 P2), all
+  fixed, none declined — see `wiki/reviews/architecture-synthesis-2026-08-29.md` (curated) and
+  `implementation/06_DECISION_LOG.md` (full detail). Real bugs caught at the design-doc stage: the
+  evaluator shim would have silently reverted to the vendor baseline on a fresh clone (lived inside a
+  gitignored directory + no sys.path setup); the orchestrator pseudocode made every clarification turn
+  an automatic miss (recommendations only populated for commit/both, not ask) and emitted the wrong
+  response object shape; the entropy formula wasn't an actual softmax and would break once preference
+  scores go negative; Phase 5's packaging didn't address offline model-weight availability despite the
+  organizer's own network-disabled warning; Phase 1.3's threshold sweep had no validation-split
+  discipline; and metadata never contributed to Browsing-turn retrieval fusion. All fixed directly in
+  the `implementation/` docs before any implementation code exists.
