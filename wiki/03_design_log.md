@@ -415,9 +415,45 @@ confirmed impossible and cut. No change to the scored `Agent`'s runtime behavior
 Phase 3.1/3.2's own work (only tooling/`strategy_config.py` comments and doc updates) — the
 corrected Phase 2 exit number (`TechnicalScore 0.40927`, commit `7be9ba7`) stands unchanged as
 Phase 3's exit number too; re-running the full 200-session evaluator would be redundant, not more
-correct, since nothing in the actual code path changed. Proceeding to Phase 3's exit codex review
-(scoped to the full diff since Phase 2's `4aeaaff` closeout, per the build plan's own instruction),
-then Phase 3.5 per the standing `/goal`.
+correct, since nothing in the actual code path changed.
+
+**Phase 3's exit codex review (`--base 4aeaaff`) failed 3 consecutive attempts** for
+environment/sandbox reasons (Windows `pwsh.exe` `CreateProcessAsUserW` access-denied errors, then a
+sandboxed Python `tempfile` failure) — logged as a blocker in `status.md`, not silently skipped. The
+phase's one substantive logic commit (`7be9ba7`) already got a full, successful per-commit review.
+
+## 2026-08-30 (cont.) — Phase 3.5: real LLM listwise reranker, Ablation 4, a genuine +6.4% win
+
+User provided a personal `ANTHROPIC_API_KEY` (added to a new, gitignored `.env` at the repo root;
+`anthropic`/`python-dotenv` added to `requirements.txt`) and asked explicitly for higher accuracy,
+given the stakes of a worldwide competition. This unblocked implementing `ranker.py`'s previously-
+stubbed `_llm_listwise_rerank()` for real: a single-pass listwise Claude Haiku 4.5 call (numbered
+candidate list + accumulated query, asked for a best-to-worst permutation), invoked only when the
+cross-encoder's own margin-skip gate doesn't already fire (i.e., only on genuinely ambiguous
+shortlists — minimizing API calls), with the existing `except Exception: pass` fallback to
+cross-encoder order on any failure (NFR-2, unchanged). `Agent.__init__` now constructs an
+`anthropic.Anthropic` client only when `ANTHROPIC_API_KEY` is present (via `python-dotenv`), else
+`None` — never a hard dependency.
+
+**Ran Ablation 4 for real** (previously never measured, since no key was available before now):
+validation split (n=40) ON 0.403042 vs OFF 0.375938; training split (n=160, confirmatory) ON
+0.442173 vs OFF 0.417604 — a consistent win on every metric on both splits, MRR gaining the most
+(+14.4% on training, exactly matching the ablation's own "watch MRR primarily" expectation), with
+zero regressions on any scenario at the larger sample size (buying and intent_override, flat at the
+smaller validation split, both improved once the training split's larger sample gave the booster
+enough ambiguous turns to engage). **Enabled by default** (`ranker.ENABLE_LLM_BOOSTER = True`).
+Full 200-session confirmatory run: **TechnicalScore 0.43531, HitRate@10 0.51, MRR 0.321032, MTTC
+6.8** — +6.4% over the guaranteed cross-encoder-only baseline, every scenario improved.
+
+**Critical caveat, reported honestly rather than oversold**: the organizer provides no hosted model
+credentials for official grading, and this key exists only in this session's local, gitignored
+`.env` — never shipped in the submission. **The official private-set score will almost certainly be
+measured without this key present**, meaning `llm_client` is `None` and this entire mechanism is
+inert during real judging. The guaranteed, always-applicable number remains the cross-encoder-only
+baseline (TechnicalScore 0.40927). This is genuine, validated, submittable-as-bonus-capability
+material for the writeup and demo — "built and ablated an optional LLM reranking tier, +6.4% when
+available" — but must never be presented as the expected competition score. Documented in
+`implementation/06_DECISION_LOG.md` D-LLM-TIER and `08_ABLATION_MATRIX.md` Ablation 4.
 
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 

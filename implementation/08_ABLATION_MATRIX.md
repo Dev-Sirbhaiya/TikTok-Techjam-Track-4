@@ -62,6 +62,19 @@ the shipped configuration if it shows a real MRR gain that justifies the added l
 risk (R2 in `07_RISK_REGISTER.md`) — the cross-encoder-only path must remain fully functional and be
 the documented default regardless of this ablation's outcome (NFR-2 is non-negotiable, not gated).
 
+**RESULT (2026-08-30, Phase 3.5, real Claude Haiku 4.5 listwise reranker, user-provided key)**:
+validation split (n=40) ON 0.475/0.306806/7.325/**0.403042** vs OFF 0.45/0.269792/7.5/**0.375938**;
+training split (n=160) ON 0.51875/0.320578/6.66875/**0.442173** vs OFF 0.5/0.280345/6.825/**0.417604**.
+Consistent win on every metric on both splits; MRR gained the most (+14.4% on training), exactly
+matching the "watch MRR primarily" expectation. **ENABLED by default** (`ranker.ENABLE_LLM_BOOSTER
+= True`). Per NFR-2, this never becomes a hard dependency — `agent.py` only constructs a client when
+`ANTHROPIC_API_KEY` is present, and any failure falls back to the guaranteed cross-encoder order.
+**The organizer's stated no-hosted-credentials policy means the official grading run will almost
+certainly have no such key, so this mechanism is expected to be inert during real judging** — the
+guaranteed cross-encoder-only number (full 200 sessions: TechnicalScore 0.40927) remains the
+realistic expected submission score. Full detail: `implementation/06_DECISION_LOG.md` D-LLM-TIER,
+`wiki/08_evaluation_log.md`.
+
 ### Ablation 5 (new) — Preference-vector boost on vs. off (gates D-PROFILE's ranking effect)
 **Procedure**: Phase 0 with `preference_boost()` disabled vs. enabled. **Watch**: MRR/HitRate@10 on
 turn 3+ specifically (early turns have little preference signal accumulated yet — the effect should

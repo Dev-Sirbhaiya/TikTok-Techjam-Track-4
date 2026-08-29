@@ -199,7 +199,8 @@ formalizes what Phase 1's threshold calibration (step 1.3) already does informal
 policy's `"both"` action is confirmed valid and should be used whenever pool size and confidence allow.
 
 ### D-LLM-TIER (new) — Cross-encoder is the guaranteed reranking stage; LLM is an optional booster, never a hard dependency
-**Status: KEPT (Phase 0).** The organizer provides no hosted model access or API credits and states a
+**Status: KEPT (Phase 0); the optional booster ITSELF implemented and ablated (2026-08-30, Phase
+3.5, user-provided key).** The organizer provides no hosted model access or API credits and states a
 paid LLM is not required. `/My Ideas/`'s tech-stack table already listed "optional LLM API" for
 reranking, but didn't make explicit that Phase 0 must fully function and beat baseline with **zero**
 external LLM calls. `research/03`'s benchmark evidence (calibrated cross-encoders matching or beating
@@ -207,6 +208,25 @@ general LLM rerankers on this exact task class) means this is not a fallback-qua
 the right default even if an API key *is* available. Any LLM usage (slot-extraction arbiter, listwise
 rerank booster) must degrade gracefully to the non-LLM path on any failure (timeout, missing key,
 exception) — see `04_SYSTEM_DESIGN.md`'s `nlu.py`/`ranker.py` try/except patterns.
+
+**Ablation 4 result (2026-08-30)**: implemented `ranker._llm_listwise_rerank()` for real — Claude
+Haiku 4.5, single-pass listwise, only invoked when the cross-encoder's own margin-skip gate doesn't
+already fire (i.e., only on genuinely ambiguous shortlists, minimizing calls). Ablated on both
+splits: validation (n=40) ON 0.403042 vs OFF 0.375938; training (n=160) ON 0.442173 vs OFF 0.417604
+— a consistent win on every metric on both splits, MRR gaining the most (+14.4% on training) exactly
+as expected for a reranking mechanism, with zero regressions on any scenario at the larger sample
+size. **Enabled by default** (`ranker.ENABLE_LLM_BOOSTER = True`) per Ablation 4's own decision rule.
+
+**Critical caveat, not a formality**: the organizer provides no hosted model credentials for the
+official grading run, and `agent.py` only constructs an `llm_client` when `ANTHROPIC_API_KEY` is
+present in the environment (this session's own local `.env`, gitignored, never shipped in the
+submission). **The official private-set score will almost certainly be measured WITHOUT this key
+present**, meaning this entire mechanism is inert during real judging and the guaranteed
+cross-encoder-only number (Phase 2 corrected exit, full 200 sessions: TechnicalScore 0.40927) is the
+realistic expected submission score, not the boosted number. The boosted result is genuine,
+validated, and worth reporting as bonus/stretch capability in the writeup and demo — but must never
+be presented as "the" score. See `wiki/08_evaluation_log.md`'s Ablation 4 rows for the full numbers
+including a same-configuration full-200-session confirmatory run.
 
 ### D-PACKAGING (new) — One implementation, two thin re-export shims
 **Status: KEPT (Phase 0).** Resolves a real gotcha neither idea source addressed: local dev evaluation

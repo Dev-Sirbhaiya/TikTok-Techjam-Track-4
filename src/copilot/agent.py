@@ -45,6 +45,25 @@ class Agent:
         self.catalog_index = CatalogIndex(products, gazetteer)
         self.gazetteer = gazetteer
         self._sessions: dict[str, DialogState] = {}
+        self.llm_client = self._build_llm_client()
+
+    @staticmethod
+    def _build_llm_client():
+        """NFR-2 / D-LLM-TIER: never a hard dependency. The organizer provides no hosted model
+        credentials, so this is None (the guaranteed cross-encoder-only path) unless a key is
+        present locally (.env -- see wiki/07_external_resources.md). Any failure here (missing
+        package, missing key, bad key) must never block Agent construction."""
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            import os
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                return None
+            import anthropic
+            return anthropic.Anthropic(api_key=api_key)
+        except Exception:
+            return None
 
     def reset(self, session_id: str, user_profile: dict) -> None:
         self._sessions[session_id] = DialogState()
@@ -106,7 +125,7 @@ class Agent:
         state.pool_entropy = entropy
 
         rerank_depth = decide_rerank_depth(len(candidates), trace)
-        ranked = rerank(candidates[:rerank_depth], state, state.accumulated_terms)
+        ranked = rerank(candidates[:rerank_depth], state, state.accumulated_terms, llm_client=self.llm_client)
         state.candidate_pool = [c["parent_asin"] for c in ranked]
 
         # Phase 2.2: close the bandit's reward loop from whatever was asked last turn -- the LIVE

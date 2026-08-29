@@ -4,8 +4,8 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-30 (Phase 3 closed out — 3.1 shipped, 3.2 cut as confirmed-impossible;
-proceeding to Phase 3.5)
+Last updated: 2026-08-30 (Phase 3 closed out; Phase 3.5's Ablation 4 shipped a genuine +6.4% optional
+LLM-booster win; continuing Phase 3.5's remaining items)
 
 ## Current phase
 
@@ -44,23 +44,41 @@ were killed externally three times in a row during Phase 1 for unclear reasons; 
 **foreground** instead (accepting the ~10-min tool cap, which auto-backgrounds long runs) worked
 reliably. Prefer foreground for evaluator runs going forward unless proven otherwise.
 
+## Current phase (cont.) — Phase 3.5 in progress: real LLM listwise reranker shipped
+
+User provided a personal `ANTHROPIC_API_KEY` (`.env` at repo root, gitignored) and asked explicitly
+for higher accuracy given the competition's stakes. Implemented `ranker.py`'s previously-stubbed
+`_llm_listwise_rerank()` for real (single-pass Claude Haiku 4.5, gated behind the cross-encoder's
+own margin-skip so it only fires on genuinely ambiguous shortlists) and ran Ablation 4 for the first
+time on real data: validation (n=40) ON 0.403042 vs OFF 0.375938; training (n=160) ON 0.442173 vs
+OFF 0.417604 — a consistent win on every metric on both splits, MRR +14.4% on training, zero
+regressions. **Enabled by default.** Full 200-session confirmatory run: **TechnicalScore 0.43531**
+(+6.4% over the guaranteed baseline).
+
+**Critical caveat — do not lose this in future summaries**: the organizer provides no hosted model
+credentials for official grading, and this key exists only in this session's local `.env`, never
+shipped in the submission. The official private-set score will almost certainly be measured
+*without* this key, meaning this mechanism is inert during real judging. **The realistic expected
+submission score remains TechnicalScore 0.40927** (the guaranteed cross-encoder-only path); 0.43531
+is a validated bonus/stretch number for the writeup and demo, never "the" score. Full detail:
+`implementation/06_DECISION_LOG.md` D-LLM-TIER, `implementation/08_ABLATION_MATRIX.md` Ablation 4.
+
 ## Next workstream
 
-**Run `implementation/05_BUILD_PLAN.md` Phase 3.5 (moderate new additions), scoped down given
-findings so far.**
+**Continue `implementation/05_BUILD_PLAN.md` Phase 3.5's remaining items.**
 
-Per the build plan: portfolio/slate hedging (reserve top slots for highest-confidence matches,
-hedge remaining slots across plausible alternative interpretations), uncertainty calibration (check
-whether entropy/confidence actually correlates with real hit-rate outcomes on held-out sessions),
-and counterfactual/synthetic rollout augmentation (only if the evaluator is confirmed genuinely
-replayable with counterfactual actions). **Scoping note for whoever picks this up**: slate hedging's
-stated rationale ("esp. if 2.1's multi-interest is kept") no longer applies since multi-interest was
-cut in Phase 2 — evaluate on its own merits, not as a multi-interest complement. The uncertainty-
-calibration check is cheap (already-logged per-turn entropy via `logging_.py` can be bucketed
-against actual hit outcomes with no new agent code) and should be done first before deciding whether
-counterfactual rollout augmentation (the most expensive item) is worth building at all. Then Phase
-3.5's exit codex review, full 200-session benchmark, phase-closeout, then Phase 4 per the standing
-goal.
+Ablation 4 (LLM booster) is done. Remaining: portfolio/slate hedging (reserve top slots for
+highest-confidence matches, hedge remaining slots across plausible alternative interpretations —
+its original rationale, "esp. if 2.1's multi-interest is kept," no longer applies since
+multi-interest was cut in Phase 2, so evaluate on its own merits); uncertainty calibration (check
+whether entropy/confidence actually correlates with real hit-rate outcomes on held-out sessions —
+cheap, since already-logged per-turn entropy via `logging_.py` can be bucketed against actual hit
+outcomes with no new agent code); counterfactual/synthetic rollout augmentation (only if the
+evaluator is confirmed genuinely replayable with counterfactual actions — the most expensive item,
+decide last). Given the LLM booster's strong result, also worth a quick look: whether an LLM-assisted
+query-understanding/expansion step (pre-retrieval) shows similar gains, time permitting — but only
+after the three build-plan items above are resolved. Then Phase 3.5's exit codex review, full
+200-session benchmark, phase-closeout, then Phase 4 per the standing goal.
 
 ## Blockers
 
