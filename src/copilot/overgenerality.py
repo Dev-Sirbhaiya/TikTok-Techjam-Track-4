@@ -40,25 +40,48 @@ def should_clarify(entropy: float, pool_size: int, turns_remaining: int,
 # classify_constraint() -- asking it can never surface a constraint (wiki/09_simulator_mechanics.md).
 _UNPRODUCTIVE_ATTRIBUTES = {"other", "brand"}
 
+# A closed-choice question only makes sense with a small, presentable set of options (phrase_question
+# shows the top 3). CORRECTED per codex review: raw, unnormalized entropy comparison across facets
+# with wildly different cardinality (e.g. near-unique per-product text) unfairly favors whichever
+# facet happens to have the most distinct values, regardless of whether that's a sensible question --
+# bucketing fixed this for "budget" (catalog.py's price_bucket()) but the same problem resurfaces for
+# any facet with inherently high cardinality (e.g. "feature", a free-text proxy). Rather than special-
+# casing every such facet, cap candidacy to a sane distinct-value range here, once, for all facets.
+_MIN_DISTINCT_VALUES = 2   # nothing to ask if everyone already agrees
+_MAX_DISTINCT_VALUES = 8   # more than this isn't a presentable closed-choice question
+
 
 def select_best_question(candidates: list[dict], filled_slots: set[str], attribute_enum: list[str]) -> str | None:
     best_attr, best_h = None, -1.0
     for attr in attribute_enum:
         if attr in filled_slots or attr in _UNPRODUCTIVE_ATTRIBUTES:
             continue
-        h = _facet_value_entropy(candidates, attr)
+        values = _facet_values(candidates, attr)
+        n_distinct = len(set(values))
+        if not (_MIN_DISTINCT_VALUES <= n_distinct <= _MAX_DISTINCT_VALUES):
+            continue
+        h = _entropy_of(values)
         if h > best_h:
             best_attr, best_h = attr, h
     return best_attr if best_h > 0 else None
 
 
-def _facet_value_entropy(candidates: list[dict], attribute: str) -> float:
-    values = [c.get("attributes", {}).get(attribute) for c in candidates if c.get("attributes", {}).get(attribute)]
+def _facet_values(candidates: list[dict], attribute: str) -> list:
+    return [c.get("attributes", {}).get(attribute) for c in candidates if c.get("attributes", {}).get(attribute)]
+
+
+def _entropy_of(values: list) -> float:
     if not values:
         return 0.0
     counts = Counter(values)
     total = len(values)
     return -sum((n / total) * math.log((n / total) + 1e-12) for n in counts.values())
+
+
+def _facet_value_entropy(candidates: list[dict], attribute: str) -> float:
+    """Kept for callers/tests that want raw entropy for a single named facet, independent of the
+    distinct-value-count gate select_best_question() applies across facets."""
+    return _entropy_of(_facet_values(candidates, attribute))
 
 
 def top_facet_values(candidates: list[dict], attribute: str, limit: int = 3) -> list[str]:

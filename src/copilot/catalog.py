@@ -4,8 +4,10 @@ Ground truth this is built against: wiki/09_simulator_mechanics.md. In particula
 - `details` has zero keys common across items even within one leaf category (verified by direct
   sampling) -- the gazetteer scans values generically, never assumes a fixed schema.
 - Some `categories` entries are actually store/brand names that leaked into the taxonomy (e.g.
-  "Westlake") -- EXCLUDED_CATEGORY_LABELS below is a starting defensive list, not exhaustive; the
-  category-frequency-based filtering in build_gazetteer() is the real defense.
+  "Westlake") -- the category-frequency-based filtering in build_gazetteer() is the defense.
+- Category strings are comma-split before use, exactly mirroring the evaluator's own
+  coarse_category() (see _normalized_category_parts()) -- getting this wrong desyncs our category
+  index from what's actually disclosed to the customer (a real bug caught by codex review).
 """
 from __future__ import annotations
 
@@ -24,13 +26,31 @@ COLOR_WORDS = {
     "purple", "yellow", "orange", "navy", "beige", "gold", "silver", "tan",
     "maroon", "teal", "ivory", "burgundy", "khaki", "coral", "lavender",
 }
-EXCLUDED_CATEGORY_LABELS = {
-    "Clothing, Shoes & Jewelry", "Clothing Shoes & Jewelry", "Clothing",
-    "Shoe, Jewelry & Watch Accessories",
+STYLE_WORDS = {
+    "casual", "formal", "crew", "v-neck", "slim", "regular", "relaxed", "fitted",
+    "oversized", "sleeveless", "long-sleeve", "short-sleeve", "collared",
 }
+USE_CASE_WORDS = {
+    "hiking", "running", "gym", "winter", "outdoor", "work", "travel", "yoga",
+    "training", "workout", "athletic", "formal wear", "everyday",
+}
+PRICE_BUCKETS = [(15, "under $15"), (25, "$15-25"), (40, "$25-40"), (60, "$40-60"),
+                 (100, "$60-100"), (float("inf"), "$100+")]
 PRICE_RE = re.compile(r"\$?\s?(\d+(?:\.\d+)?)")
 _MATERIAL_RE = re.compile(r"\b(" + "|".join(sorted(MATERIAL_WORDS)) + r")\b")
 _COLOR_RE = re.compile(r"\b(" + "|".join(sorted(COLOR_WORDS)) + r")\b")
+_STYLE_RE = re.compile(r"\b(" + "|".join(sorted(STYLE_WORDS)) + r")\b")
+_USE_CASE_RE = re.compile(r"\b(" + "|".join(sorted(USE_CASE_WORDS)) + r")\b")
+
+
+def price_bucket(price: float) -> str:
+    """Buckets price into a small, fixed number of bands -- see the codex-review fix on
+    _attributes_for() below for why (raw per-item price has near-100% cardinality, which unfairly
+    dominates unnormalized entropy comparisons against low-cardinality facets like color)."""
+    for ceiling, label in PRICE_BUCKETS:
+        if price < ceiling:
+            return label
+    return PRICE_BUCKETS[-1][1]
 TOKEN_RE = re.compile(r"[a-z0-9]+")
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
@@ -72,6 +92,35 @@ def tokenize(text: str) -> list[str]:
     return [t for t in TOKEN_RE.findall(text.lower()) if len(t) > 1 and t not in STOPWORDS]
 
 
+_EXCLUDED_CATEGORY_LOWER = {"clothing", "clothing shoes & jewelry", "clothing, shoes & jewelry"}
+
+
+def _normalized_category_parts(categories: list[str]) -> list[str]:
+    """Mirrors the evaluator's own coarse_category() EXACTLY (verified against
+    evaluator/local_evaluator.py) -- each category STRING is itself split on commas before
+    filtering, not treated as one atomic label (e.g. "Tops, Tees & Blouses" splits into "Tops"
+    and "Tees & Blouses" as two separate parts). CORRECTED per codex review: the original version
+    of this module treated each `categories` entry as atomic (no comma-splitting), which silently
+    desynced our category index from what the evaluator actually discloses to the customer --
+    products could be indexed under a raw multi-word label containing a comma while the disclosed
+    text never contains one, causing the true target to be excluded from Buying-track hard filters
+    while an unrelated product with a coincidentally-matching shorter label got included."""
+    cleaned: list[str] = []
+    for value in categories or []:
+        for part in str(value).split(","):
+            part = part.strip()
+            if part and part.lower() not in _EXCLUDED_CATEGORY_LOWER:
+                cleaned.append(part)
+    return cleaned
+
+
+def coarse_category(categories: list[str]) -> str:
+    """Mirrors the evaluator's own coarse_category(): last two non-generic category parts,
+    space-joined. See _normalized_category_parts() for the comma-splitting this depends on."""
+    parts = _normalized_category_parts(categories)
+    return " ".join(parts[-2:]) if parts else "clothing item"
+
+
 def build_gazetteer(products: dict[str, dict]) -> dict[str, set]:
     """Scan the full catalog once to build vocabularies. Categories are frequency-filtered (not just
     excluded by a hardcoded blocklist) since store/brand names occasionally leak into the taxonomy."""
@@ -95,21 +144,14 @@ def build_gazetteer(products: dict[str, dict]) -> dict[str, set]:
         text = searchable_text(p).lower()
         materials.update(_MATERIAL_RE.findall(text))
         colors.update(_COLOR_RE.findall(text))
-        for c in (p.get("categories") or []):
-            if c and c not in EXCLUDED_CATEGORY_LABELS:
-                category_counts[c] += 1
+        for part in _normalized_category_parts(p.get("categories") or []):
+            category_counts[part] += 1
 
     # A "category" that appears on only 1-2 products in a 50k catalog is far more likely to be a
     # mislabeled store/brand name than a genuine taxonomy node -- drop the long tail.
     categories = {c for c, n in category_counts.items() if n >= 5}
     brands = {b for b in brands if len(b) <= 40}
     return {"brands": brands, "sizes": sizes, "materials": materials, "colors": colors, "categories": categories}
-
-
-def coarse_category(categories: list[str]) -> str:
-    """Mirrors the evaluator's own coarse_category(): last two non-generic category tokens."""
-    cleaned = [c for c in (categories or []) if c not in EXCLUDED_CATEGORY_LABELS]
-    return " ".join(cleaned[-2:]) if cleaned else "clothing item"
 
 
 class CatalogIndex:
@@ -130,6 +172,7 @@ class CatalogIndex:
         self._embed_model = None
         self._embeddings: Optional["np.ndarray"] = None  # type: ignore[name-defined]
         self._id_to_idx: dict[str, int] = {}
+        self._dense_failed = False
 
     # ---------- BM25 (plain, dependency-free — see D-BM25 in wiki/03_design_log.md) ----------
     def _build_bm25_and_metadata(self) -> None:
@@ -139,9 +182,9 @@ class CatalogIndex:
             tf: Counter[str] = Counter(tokens)
             for t, count in tf.items():
                 self._inverted[t][pid] = count
-            for c in (p.get("categories") or []):
-                if c in self.gazetteer["categories"]:
-                    self._by_category[c].add(pid)
+            for part in _normalized_category_parts(p.get("categories") or []):
+                if part in self.gazetteer["categories"]:
+                    self._by_category[part].add(pid)
             details = p.get("details") if isinstance(p.get("details"), dict) else {}
             for key, val in details.items():
                 if "brand" in key.lower() and val:
@@ -237,6 +280,15 @@ class CatalogIndex:
         return out
 
     def _attributes_for(self, p: dict) -> dict:
+        """CORRECTED per codex review (two related findings): this used to populate only
+        color/material/category/budget, so `_facet_value_entropy` always returned 0 for
+        feature/style/size/use_case and `select_best_question` could never ask about them --
+        despite almost every intent card having a feature-classified constraint. Also, raw price
+        (near-100% cardinality) was unfairly dominating unnormalized entropy comparisons against
+        low-cardinality facets like color, making "budget" the default first question even though
+        wiki/09's own finding is that budget rarely survives the intent card's candidate slicing.
+        Now: every enum-relevant facet gets a populated (if best-effort) value, and price is
+        bucketed into a handful of bands so its cardinality is comparable to the others."""
         text = searchable_text(p).lower()
         attrs: dict[str, Any] = {}
         color_match = _COLOR_RE.search(text)
@@ -245,10 +297,32 @@ class CatalogIndex:
         material_match = _MATERIAL_RE.search(text)
         if material_match:
             attrs["material"] = material_match.group(1)
+        style_match = _STYLE_RE.search(text)
+        if style_match:
+            attrs["style"] = style_match.group(1)
+        use_case_match = _USE_CASE_RE.search(text)
+        if use_case_match:
+            attrs["use_case"] = use_case_match.group(1)
+
+        details = p.get("details") if isinstance(p.get("details"), dict) else {}
+        for key, val in details.items():
+            if "size" in key.lower() and val:
+                attrs["size"] = str(val).strip()[:24]
+                break
+
         attrs["category"] = coarse_category(p.get("categories") or [])
+
         price = p.get("price")
         if isinstance(price, (int, float)):
-            attrs["budget"] = f"${price:.0f}"
+            attrs["budget"] = price_bucket(price)
+
+        features = p.get("features")
+        if isinstance(features, list) and features:
+            # Best-effort proxy: the simulator's own "feature" bucket is a catch-all for whatever
+            # doesn't classify as budget/material/color/size/style/use_case, so there's no single
+            # canonical value to predict exactly -- the first feature bullet at least gives the
+            # entropy calculation real per-product variation to work with, rather than always 0.
+            attrs["feature"] = str(features[0]).strip()[:60]
         return attrs
 
     @staticmethod
@@ -264,22 +338,37 @@ class CatalogIndex:
 
     # ---------- dense retrieval (lazy model load; degrades gracefully if unavailable — NFR-2) ----------
     def _ensure_dense_ready(self) -> bool:
+        """CORRECTED per codex review, two bugs fixed together:
+        1. A cache *write* failure (e.g. read-only directory) used to discard the already-computed
+           in-memory embeddings matrix too, via one broad try/except around both compute and save --
+           the very next call (this is invoked once per candidate per turn via embedding_for(), plus
+           once via encode_text()) would then recompute the ENTIRE 50K-item catalog from scratch
+           every single time, effectively hanging evaluation. Saving to disk is now best-effort and
+           isolated from the in-memory result.
+        2. A genuine failure (import error, encode() itself raising) is now memoized in
+           `self._dense_failed` so it's not retried on every call for the rest of the session --
+           NFR-2's "degrade gracefully" must mean degrade ONCE, not degrade-and-retry-expensively
+           forever.
+        """
         if self._embeddings is not None:
             return True
+        if self._dense_failed:
+            return False
         try:
             import numpy as np
             from sentence_transformers import SentenceTransformer
         except Exception:
+            self._dense_failed = True
             return False
         try:
             cache_path = Path("data/_catalog_embeddings.npy")
             self._embed_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
             # Self-caught performance bug before shipping this: the first version encoded up to
             # 1000 chars/item (title+features+description+categories+store+details) across all
-            # 50K items -- attention cost scales with sequence length, and this took 20+ minutes
-            # on CPU with no visible progress. Embedding text only needs enough signal to place an
-            # item correctly in semantic space (title + a couple of features + category), not the
-            # full searchable-text blob BM25 already covers exhaustively -- cut sequence length by
+            # 50K items -- attention cost scales with sequence length, and this took far longer
+            # than expected on CPU. Embedding text only needs enough signal to place an item
+            # correctly in semantic space (title + a couple of features + category), not the full
+            # searchable-text blob BM25 already covers exhaustively -- cut sequence length by
             # ~5-8x and cap the model's own max_seq_length so long outliers can't dominate cost.
             self._embed_model.max_seq_length = 64
             if cache_path.exists():
@@ -291,14 +380,20 @@ class CatalogIndex:
             texts = [self._embedding_text(self.products[pid]) for pid in self.ids]
             emb = self._embed_model.encode(
                 texts, batch_size=256, show_progress_bar=True, normalize_embeddings=True)
-            self._embeddings = np.asarray(emb, dtype="float32")
-            self._id_to_idx = {pid: i for i, pid in enumerate(self.ids)}
+        except Exception:
+            self._dense_failed = True
+            return False
+
+        # Compute succeeded -- commit the in-memory result unconditionally. Persisting the cache
+        # to disk is a pure optimization for future runs; its failure must never undo this.
+        self._embeddings = np.asarray(emb, dtype="float32")
+        self._id_to_idx = {pid: i for i, pid in enumerate(self.ids)}
+        try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             np.save(cache_path, self._embeddings)
-            return True
-        except Exception:
-            self._embeddings = None
-            return False
+        except OSError:
+            pass  # best-effort; this run still has working embeddings in memory regardless
+        return True
 
     def dense_search(self, query_text: str, top_n: int = 150) -> list[str]:
         if not self._ensure_dense_ready():

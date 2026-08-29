@@ -133,6 +133,31 @@ also get logged here (with a link to the full report under `reviews/`).
   build-order discipline both idea sources and our own research converge on (floor first, ambitious
   ideas ablation-gated).
 
+## 2026-08-29 (cont.) — Phase 0 implementation: `src/copilot/` written, 21 tests passing, one real environment issue found
+
+- User invoked `/goal` to start Phase 0 implementation. Wrote the full `src/copilot/` package per
+  `implementation/04_SYSTEM_DESIGN.md`: `state.py`, `catalog.py`, `nlu.py`, `intent_router.py`,
+  `retrieval.py`, `rejection_memory.py`, `preference.py`, `overgenerality.py`, `ranker.py`,
+  `turn_policy.py`, `phrasing.py`, `logging_.py`, `agent.py`, plus `tools/install_shim.py` and
+  `tools/run_eval.py`. 21 fast unit tests (`tests/test_smoke.py`) all passing.
+- Caught and fixed 6 real bugs during implementation, before any codex review touched this code
+  (logged in full in the commit message and `implementation/06_DECISION_LOG.md`): a BM25 full-scan
+  instead of an inverted index, an O(n) embedding lookup instead of a dict, retrieval losing
+  accumulated context on "no new info" turns, multiple revealed values overwriting each other in one
+  slot key, a turn-policy scale-mismatch risk, and slow catalog dense-embedding text.
+- **Real environment issue found and documented (D-EMBED-CACHE)**: encoding the full 50K-item
+  catalog through `bge-small-en-v1.5` showed wildly inconsistent throughput in this dev sandbox — a
+  500-text synthetic benchmark ran at 318 texts/sec, but real diverse catalog text stabilized at a
+  much lower ~42-50 texts/sec (confirmed via a controlled 200/1000/3000/6000-sample test, not
+  degrading further at scale — so a bounded, finite rate, not runaway throttling as first suspected
+  from two premature kills at 25 min and 60 min). Full 50K catalog ≈ 18-20 min one-time cost.
+  Decision: since the catalog is frozen for the whole competition, precompute this once and **ship
+  the cached embeddings matrix as a submission asset** rather than relying on it being fast (or even
+  completing within a time limit) on the official judge's machine — added to `05_BUILD_PLAN.md`
+  Phase 0.2 and Phase 5.2.
+- Committed (`90d6501`); phase-level codex review and the real 200-session evaluator run were both
+  kicked off in parallel — results in the next log entry.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside

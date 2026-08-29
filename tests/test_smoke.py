@@ -9,8 +9,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from copilot.catalog import _normalized_category_parts, coarse_category, price_bucket
 from copilot.nlu import extract_slot_updates, classify_value_attribute, apply_extraction
-from copilot.overgenerality import score_entropy, should_clarify, _facet_value_entropy
+from copilot.overgenerality import score_entropy, should_clarify, select_best_question, _facet_value_entropy
 from copilot.rejection_memory import detect_rejection_signal, apply_rejection, apply_rejection_filter
 from copilot.retrieval import reciprocal_rank_fusion
 from copilot.state import DialogState
@@ -199,6 +200,53 @@ def test_accumulated_terms_survive_a_no_new_info_turn():
     apply_extraction(state, extract_slot_updates(
         "I don't have an additional preference for budget.", state, GAZETTEER, turn=2), turn=2)
     assert "dresses" in state.accumulated_terms and "cotton" in state.accumulated_terms
+
+
+def test_word_boundary_prevents_substring_misclassification():
+    # Regression for codex review finding: "Water Resistant" contains "tan" as a substring and
+    # was being classified as color=tan before word-boundary matching was added.
+    assert classify_value_attribute("Water Resistant", GAZETTEER) != "color"
+    assert classify_value_attribute("black leather strap", GAZETTEER) == "material"  # leather wins (checked first)
+    assert classify_value_attribute("black", GAZETTEER) == "color"
+
+
+def test_category_normalization_matches_evaluator_comma_splitting():
+    # Regression for codex review finding: categories must be comma-split before use, exactly
+    # like the evaluator's own coarse_category(), or our index desyncs from what's disclosed.
+    categories = ["Clothing, Shoes & Jewelry", "Women", "Clothing", "Tops, Tees & Blouses"]
+    parts = _normalized_category_parts(categories)
+    assert "Tops" in parts and "Tees & Blouses" in parts
+    assert "Clothing" not in parts  # excluded exactly, not just as a whole unsplit string
+    assert coarse_category(categories) == "Tops Tees & Blouses"
+
+
+def test_price_bucket_reduces_cardinality():
+    assert price_bucket(10) == "under $15"
+    assert price_bucket(150) == "$100+"
+    # A handful of fixed bands, not one bucket per distinct price -- this is what prevents budget
+    # from dominating unnormalized entropy comparisons against low-cardinality facets like color.
+    assert len({price_bucket(p) for p in range(0, 200, 5)}) <= 6
+
+
+def test_select_best_question_skips_near_unique_facets():
+    # Regression for codex review finding: a facet where almost every candidate has a distinct
+    # value (e.g. raw per-product feature text) must not be selectable as a closed-choice question
+    # just because its raw entropy is high -- it's not presentable as 2-4 options.
+    candidates = [{"attributes": {"feature": f"unique feature text {i}", "color": "black" if i % 2 else "red"}}
+                  for i in range(10)]
+    attr = select_best_question(candidates, filled_slots=set(), attribute_enum=["feature", "color", "other", "brand"])
+    assert attr == "color"  # color has 2 presentable values; feature has 10 near-unique ones
+
+
+def test_no_new_info_turn_does_not_trigger_rejection():
+    # Regression for codex review finding: the simulator's own decline templates contain "don't"
+    # and were being misread as an implicit rejection by rejection_memory's negation check --
+    # agent.py now skips rejection detection entirely when nlu.py already tagged a turn as
+    # "no new info" (i.e. it matched one of those exact templates).
+    result = extract_slot_updates(
+        "I don't have an additional preference for budget.", DialogState(), GAZETTEER, turn=3)
+    assert result["no_new_info"] is True
+    # (the actual skip lives in agent.py's respond() -- this test documents the signal it checks)
 
 
 def test_override_resets_accumulated_terms_to_new_intent():

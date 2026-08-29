@@ -43,13 +43,18 @@ _RESET_CUES = re.compile(r"\b(actually|never mind|instead|forget (?:that|it|the)
 
 def classify_value_attribute(value: str, gazetteer: dict[str, set]) -> str:
     """Mirror of the simulator's own classify_constraint() taxonomy -- lets us file a revealed
-    value under the right internal slot even when we already know it's "whatever we asked about"."""
+    value under the right internal slot even when we already know it's "whatever we asked about".
+
+    CORRECTED per codex review (wiki/reviews/phase0-implementation-2026-08-29.md): plain substring
+    `in` checks misclassify ordinary text whenever a short gazetteer word occurs inside another word
+    -- e.g. "Water Resistant" contains "tan" and was being classified as color=tan. Word-boundary
+    regex matching, consistent with catalog.py's _MATERIAL_RE/_COLOR_RE."""
     lowered = value.lower()
     if "budget" in lowered or _PRICE_RE.search(lowered) or _BARE_PRICE_RE.search(lowered):
         return "budget"
-    if any(m in lowered for m in gazetteer.get("materials", ())):
+    if any(re.search(rf"\b{re.escape(m)}\b", lowered) for m in gazetteer.get("materials", ())):
         return "material"
-    if any(c in lowered for c in gazetteer.get("colors", ())):
+    if any(re.search(rf"\b{re.escape(c)}\b", lowered) for c in gazetteer.get("colors", ())):
         return "color"
     if any(w in lowered for w in ("size", "sizing", "width", "wide", "narrow")):
         return "size"
@@ -214,6 +219,13 @@ def apply_extraction(state, extraction: dict[str, Any], turn: int) -> None:
         # keep searching partly for the abandoned category alongside the new one. The category
         # slot itself (if still known) and the override's new value seed the reset list.
         state.accumulated_terms = [t for t in (state.slots.get("category"), override.get("new_value")) if t]
+        # CORRECTED per codex review: preference vectors were left untouched on a forced override,
+        # so the EMA update kept most of the embedding learned from the just-abandoned preference
+        # and its boost (weighted lam/mu in preference.py) is large relative to RRF scores --
+        # post-override ranking stayed biased toward the old, explicitly-rejected intent. A forced
+        # override is a hard pivot, not a gradual drift, so it gets the same hard reset as slots.
+        state.pref_vector_pos = None
+        state.pref_vector_neg = None
 
     for key, value in extraction.get("slot_updates", {}).items():
         state.slots[key] = value

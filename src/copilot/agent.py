@@ -54,7 +54,15 @@ class Agent:
         extraction = extract_slot_updates(user_message, state, self.gazetteer, turn)
         apply_extraction(state, extraction, turn)
 
-        rejection_signal = detect_rejection_signal(user_message, self.gazetteer)
+        # CORRECTED per codex review: the simulator's own non-answer templates ("I don't have an
+        # additional preference for X", "I don't have a preference for X; please use your
+        # judgment") contain "don't" and were matching rejection_memory's negation regex, so
+        # declining to answer a clarification question was being misread as an implicit rejection
+        # -- penalizing the top-ranked candidate and corrupting the negative preference vector on
+        # every unproductive clarification, not just genuine rejections. Skip rejection detection
+        # entirely on turns nlu.py already tagged as "no new info" (it recognized these exact
+        # templates); only run it on genuine free-form user turns.
+        rejection_signal = None if extraction.get("no_new_info") else detect_rejection_signal(user_message, self.gazetteer)
         if rejection_signal:
             apply_rejection(state, rejection_signal)
 
