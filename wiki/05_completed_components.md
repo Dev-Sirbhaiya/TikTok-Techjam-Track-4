@@ -40,6 +40,17 @@ this is the first time since the gap was noticed that new pieces are being added
   full-catalog re-encode. Fixed with an explicit `os.chdir(PARTICIPANT_REPO)` before constructing
   `Agent`, matching the eval convention; re-verified fast (cache hit) after the fix.
 
+### `tools/diagnose_buying_recall.py`
+- Location: `tools/diagnose_buying_recall.py`
+- What it does: for every session, measures whether the hidden target ever reaches the fused/
+  filtered candidate pool (before rerank) vs. reaches it but never the final top-10 vs. hits.
+  Monkeypatches `retrieve_candidates`/`route_retrieval_breadth` at the point `agent.py` calls them
+  (no scored file edited) so it's pure measurement, safe to run against the full 200-session set.
+  This is what found the buying-track gap's actual root cause (see D-HARD-FILTER-EXT).
+- Verified by: full 200-session run (all scenarios) plus a buying-only `--no-hard-filter` isolation
+  run — see `wiki/08_evaluation_log.md`'s 2026-08-30 rows for the exact numbers.
+- Completed: 2026-08-30 (workstream: Phase 5.6)
+
 ### `docs/DEMO_VIDEO_SCRIPT.md` / `docs/DEVPOST_WRITEUP.md`
 - Location: `docs/DEMO_VIDEO_SCRIPT.md`, `docs/DEVPOST_WRITEUP.md`
 - What it does: a recordable script for the Phase 5.4 demo video and a full draft of every standard

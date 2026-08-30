@@ -856,3 +856,12 @@ alive, use `kill -0 <pid>` instead). Neither produced a result and neither was r
 interrupt pattern (three background tasks killed within minutes of each other). This doesn't weaken
 the headline number — it's backed by two independent, directionally-consistent prior runs (training +
 validation) — but the optional-ceiling number is now stale and not re-measured on top of this fix.
+
+**Codex review of this commit (`4d8e52e`)**: two attempts, both failed to produce a verdict (one 15
+lines / one exec call, one 6 lines / no exec calls at all before stopping) — no `ExitedReviewMode`
+in either transcript. Consistent with today's established pattern (4 genuinely-incomplete reviews
+now, across three unrelated commits of varying size). Not retried a third time; `4d8e52e` accepted
+as manually-reviewed-only, same basis as `2fe00dd` and `77829e1` earlier today. The change itself
+was independently reasoned through (root-caused via direct measurement, not guessed), tested with
+two new unit tests, and ablated on both data splits before being written — the review would have
+been a second automated pass on top of substantial existing rigor, not the only check.

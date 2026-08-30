@@ -119,12 +119,14 @@ stable once a given cache file is fixed, not a control-flow bug.
 
 ## Next workstream
 
-**Phase 5 — submission packaging. 5.1, 5.2, and 5.3 are done** (final numbers, `submission/`
-packaging with bundled offline model/cache artifacts, README) — see `implementation/05_BUILD_PLAN.md`'s
-Phase 5 section. `tools/build_submission.py` regenerates `submission/` (gitignored, a build
-artifact) from scratch any time; **re-run it before actually submitting** if `src/copilot/` or
-`docs/SUBMISSION_README.md` change again — the last build already includes every fix from the
-recovered-reviews triage (cache path fix, LLM booster fix, slate hedging reversal).
+**Phase 5 — submission packaging. 5.1, 5.2, 5.3, and 5.6 are done.** `submission/` has been
+rebuilt (gitignored, a build artifact) with commit `4d8e52e`'s buying-track fix included —
+**re-run `tools/build_submission.py` before actually submitting** if `src/copilot/` or
+`docs/SUBMISSION_README.md` change again. Codex review of `4d8e52e` was attempted twice, both
+genuinely incomplete (no verdict in either transcript) — accepted as manually-reviewed-only,
+same basis as `2fe00dd`/`77829e1` earlier today (4 incomplete reviews total today, across three
+differently-sized commits — a real environment reliability issue, not a diff-size or one-off
+problem).
 
 **5.4 and 5.5 now have working drafts, not just a plan**:
 - `docs/DEMO_VIDEO_SCRIPT.md` — a full recordable script (terminal-recording format, ~4-6 min),
