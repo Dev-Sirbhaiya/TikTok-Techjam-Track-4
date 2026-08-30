@@ -142,6 +142,19 @@ exit codex review, full 200-session benchmark, phase-closeout, then Phase 4 per 
   fallback-on-failure code path (`except Exception: pass`) is identical to the already-reviewed
   Phase 0 pattern. Retry this specific review when codex proves reliable again.
 
+- **Root cause found and partially fixed**: `codex doctor` showed `sandbox backend: elevated` —
+  Windows sandbox mode requiring `CreateProcessAsUserW` to spawn subprocesses, which is exactly what
+  was failing with "Access is denied." User added a `Bash(codex exec review:*)` permission rule so
+  `-c windows.sandbox="unelevated"` could be passed (valid values are `elevated`/`unelevated`, not
+  `none` — first guess was wrong). **This fixed the hard crash** — `pwsh.exe` commands now succeed
+  under `unelevated` instead of erroring. **But reviews still don't reliably reach a verdict**: even
+  with the crash fixed, most attempts (including on a substantive commit, `2d0dd4b`) exit cleanly
+  (code 0) after just one or two exploratory commands, with no review comment ever written — a
+  different, so-far-undiagnosed issue in codex's own review loop, not a sandbox/permission problem
+  anymore. **Going forward, always pass `-c windows.sandbox="unelevated"`** (strictly better than
+  the default `elevated`, which hard-crashes) — but don't expect it to guarantee a completed review;
+  treat each attempt as a coin flip and don't sink excessive time re-trying a single commit.
+
 ## Recent activity
 
 - 2026-08-26 to 2026-08-29 (early) — Project scaffolding, research, architecture corpus, two-tier
