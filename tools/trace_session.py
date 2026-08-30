@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import uuid
@@ -52,6 +53,12 @@ def main() -> None:
 
     subprocess.run([sys.executable, str(REPO_ROOT / "tools" / "install_shim.py")], check=True, cwd=REPO_ROOT)
 
+    # tools/run_eval.py invokes the evaluator with cwd=PARTICIPANT_REPO, so that's where
+    # CatalogIndex's embedding cache actually lives on disk (data/_catalog_embeddings.npz,
+    # cwd-relative) -- self-caught while first testing this script: constructing Agent from the
+    # repo root's cwd instead missed that cache entirely and silently launched a ~14.5-minute
+    # from-scratch encode of all 50,000 catalog items. Match the eval convention exactly.
+    os.chdir(PARTICIPANT_REPO)
     sys.path.insert(0, str(PARTICIPANT_REPO))
     from evaluator.local_evaluator import (  # noqa: E402
         catalog_index, coarse_category, customer_reply, initial_message,
@@ -77,7 +84,7 @@ def main() -> None:
     override_applied = sample["scenario_type"] != "intent_override"
     user_message = initial_message(effective_sample, coarse_category(categories.get(target, [])), disclosed)
 
-    print(f"(hidden target for this session: {target} — never seen by the agent)\n")
+    print(f"(hidden target for this session: {target} -- never seen by the agent)\n")
 
     for turn in range(1, MAX_TURNS + 1):
         print(f"--- turn {turn} ---")

@@ -87,10 +87,16 @@ recovered-reviews triage (cache path fix, LLM booster fix, slate hedging reversa
 
 **5.4 and 5.5 now have working drafts, not just a plan**:
 - `docs/DEMO_VIDEO_SCRIPT.md` — a full recordable script (terminal-recording format, ~4-6 min),
-  proposing a default for SQ4's open format question. `tools/trace_session.py` (new) runs one real
-  public-set session end-to-end and prints a readable per-turn trace for the recording — reuses the
-  organizer's own `initial_message`/`customer_reply` simulation functions directly, so the traced
-  behavior is identical to a real scored run.
+  proposing a default for SQ4's open format question, with a specific, already-verified session
+  (`public_0005`, hits turn 3 rank 1) picked from `results.json`'s own recorded sessions rather than
+  cherry-picked by re-running. `tools/trace_session.py` (new, tested) runs one real public-set
+  session end-to-end and prints a readable per-turn trace for the recording — reuses the organizer's
+  own `initial_message`/`customer_reply` simulation functions directly, so the traced behavior is
+  identical to a real scored run. **Self-caught while first testing it**: constructing `Agent` from
+  the repo root's cwd (instead of matching `tools/run_eval.py`'s convention of running with
+  `cwd=<participant repo>`) missed the real embedding cache entirely and silently launched a
+  ~14.5-minute full-catalog re-encode — fixed with an explicit `os.chdir`, re-verified fast
+  (cache-hit) after the fix.
 - `docs/DEVPOST_WRITEUP.md` — a full draft covering every standard Devpost section, built from this
   project's own real numbers and honest ablation history (including the slate-hedging reversal and
   the codex-review recovery episode as genuine technical narrative, not just a footnote). A few
@@ -105,12 +111,12 @@ user's confirmation on SQ3/SQ5 (see `implementation/09_SUPERVISOR_QUESTIONS.md`)
 **If picking up codex review again**: always pass `-c windows.sandbox="unelevated"` (fixes a hard
 crash vs. the default), but ALSO always check the session transcript directly if the `.raw.txt`
 looks short/incomplete — see `CLAUDE.md`'s protocol note and `tools/extract_review.py`. Do not
-conclude a review "found nothing" from a short raw.txt alone. **New, distinct finding (2026-08-30,
-recovery-fix commit `2fe00dd`)**: a review can also genuinely fail to complete — not a redirect
-issue, the transcript itself has no `ExitedReviewMode` event — apparently more likely on a wide,
-many-file diff (this commit touched 20 files; two independent attempts both died mid-review after
-real work, never producing a verdict). If this recurs, split the review by file/concern rather than
-retrying the same wide diff a third time.
+conclude a review "found nothing" from a short raw.txt alone. **New, distinct finding (2026-08-30)**:
+a review can also genuinely fail to complete — not a redirect issue, the transcript itself has no
+`ExitedReviewMode` event. Seen 3 times today across two unrelated commits, one 20 files and one 8
+files, so it's not a diff-size problem — a current environment-level reliability issue with the
+review synthesis step. Don't retry more than once; accept manual-review-only past that (both
+`2fe00dd` and `77829e1` are on that basis now).
 
 ## Blockers
 

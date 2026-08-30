@@ -104,13 +104,14 @@ several with real, high-priority findings that went untriaged for hours — see 
 never complete: its own session transcript has no `ExitedReviewMode` event anywhere (confirmed by
 reading the JSONL directly, not just running `tools/extract_review.py` and seeing nothing — grep the
 raw file for the literal string too, since it can appear inside displayed source/doc content and
-give a false positive). Seen twice on the same wide (20-file) diff in this repo (2026-08-30,
-`wiki/03_design_log.md`'s "genuinely incomplete" entry) — both attempts entered review mode, did
-real work (dozens of exec calls, real reasoning), then stopped cold with no verdict. If a transcript
-check shows real work but no `ExitedReviewMode` after one retry, don't retry a third time on the
-same wide scope — split the review by file or concern instead, or accept the commit as
+give a false positive). Seen three times in this repo on 2026-08-30 (`wiki/03_design_log.md`'s
+"genuinely incomplete" entries) — on a 20-file diff (twice) AND on an unrelated 8-file diff — every
+attempt entered review mode, did real work (reasoning + exec calls reading the actual diff), then
+stopped cold with no verdict and no error message. Diff size is not the variable; this looks like a
+current environment-level reliability issue with the review synthesis step itself. **Don't chase
+it**: if one retry also shows real work but no `ExitedReviewMode`, stop — accept the commit as
 manually-reviewed only (the same bar several earlier commits in this project shipped under when
-review was unavailable).
+review was unavailable) rather than spending a third attempt for no new information.
 
 When the review finishes (you'll be notified — don't poll for it):
 1. Read the raw report. If it looks incomplete or inconclusive, check the session transcript per

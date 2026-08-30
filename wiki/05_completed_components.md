@@ -28,9 +28,17 @@ this is the first time since the gap was noticed that new pieces are being added
   `initial_message`/`customer_reply`/`materialize_hidden_fields` simulation functions directly so
   the traced behavior is identical to a real scored run. Built for the Phase 5.4 demo video
   recording, not a scored-path tool.
-- Verified by: manual run, `python tools/trace_session.py --scenario buying` — see
-  `wiki/03_design_log.md`'s 2026-08-30 entry for the result.
-- Completed: 2026-08-30 (workstream: Phase 5.4 demo video prep)
+- Verified by: manual run, `python tools/trace_session.py --sample-id public_0005` — clean 3-turn
+  trace ending in a hit at rank 1, matching `results.json`'s recorded outcome for that session. An
+  earlier test run (before the cwd fix below) surfaced a real bug, not just validated the happy
+  path.
+- Completed: 2026-08-30 (workstream: Phase 5.4 demo video prep). **Self-caught bug, same day**:
+  first test run hung for 7+ minutes instead of the expected ~10-15s, because `Agent` was
+  constructed with the process cwd at the repo root while the embedding cache artifact actually
+  lives under the participant repo's `data/` dir (an artifact of `tools/run_eval.py` running the
+  evaluator with `cwd=<participant repo>`) — a cache miss silently launches a ~14.5-minute
+  full-catalog re-encode. Fixed with an explicit `os.chdir(PARTICIPANT_REPO)` before constructing
+  `Agent`, matching the eval convention; re-verified fast (cache hit) after the fix.
 
 ### `docs/DEMO_VIDEO_SCRIPT.md` / `docs/DEVPOST_WRITEUP.md`
 - Location: `docs/DEMO_VIDEO_SCRIPT.md`, `docs/DEVPOST_WRITEUP.md`

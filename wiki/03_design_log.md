@@ -781,8 +781,18 @@ signal that another attempt at the same scope won't land. `2fe00dd` is treated a
 manually-reviewed-only: every one of its 9 changes was already independently reasoned through,
 tested (re-ablated on both splits where relevant), and cross-checked against
 `10_PRE_REGISTRATION.md` and `06_DECISION_LOG.md` before being written — the same bar several
-earlier commits in this session shipped under when codex review was unavailable. **Process note for
-future large multi-file commits**: if a review needs to run against a wide diff again, split it
-per-file or per-concern rather than reviewing 20 changed files in one pass — cheap to do, and this
-session now has direct evidence a single big diff can cause the review to run out of steam before
-reaching a verdict.
+earlier commits in this session shipped under when codex review was unavailable.
+
+**Update, same session, same hour**: the "only fails on wide diffs" theory above is wrong. A
+*separate*, much smaller review (Phase 5.4/5.5's commit `77829e1` — 8 files, mostly new docs plus
+one small tool script) was launched next and **failed the identical way**: transcript
+`01a0511c-1f81-...` shows `EnteredReviewMode`, 11 `CommandExecution` + 15 `Reasoning` items, real
+work reading `implementation/02_TECHNICAL_PRD.md` and the diff, then stops cold mid-file-read with
+no `ExitedReviewMode`, no error message anywhere in either the transcript or the raw stdout. Three
+independent review invocations in the same session now show this exact shape (real work, clean
+stop, no verdict, no error) regardless of diff size — this reads as a genuine, current
+environment-level reliability issue with `codex exec review`'s synthesis step in this session, not
+something caused by anything in this repo's diffs. **Revised process note**: stop treating this as
+"retry until it works" — after one retry with no verdict, accept manual review for that commit and
+move on; a third attempt bought no new information here and cost real time against the clock.
+`CLAUDE.md`'s guidance updated accordingly.

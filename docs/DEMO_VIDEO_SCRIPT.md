@@ -40,26 +40,33 @@ Show the pipeline diagram from `wiki/01_architecture.md` (`Shape` section) on sc
 
 ## Section 3 — Live multi-turn session trace (2–3 minutes, the core of the video)
 
-Run one real session end-to-end against the actual evaluator/agent, showing the request and
-response JSON for each turn in the terminal. Pick a **Buying** scenario for the walkthrough (the
-scenario where the agent's behavior — locking a hard constraint, converging fast — is most legible
-on screen) with a real, non-cherry-picked session ID from `data/public_set.jsonl`.
-
-Suggested command (adjust to whatever `tools/run_eval.py` or a small ad-hoc script currently
-exposes for single-session tracing — a `--session-id` / `--verbose` single-session mode is worth
-adding to `tools/run_eval.py` before recording if it doesn't already print a clean per-turn trace):
+Run one real session end-to-end against the actual agent using `tools/trace_session.py` (built for
+this recording — see below), showing the customer message and agent response for each turn in the
+terminal. Use **`--sample-id public_0005`**: a real Buying-scenario session from
+`data/public_set.jsonl`, verified to hit on turn 3 at rank 1 (`external/techjam-conversational-
+search/results.json`'s own recorded session list, not cherry-picked by re-running until something
+looked good) — clean enough to narrate turn-by-turn without the recording running long on a miss.
 
 ```bash
-python -m tools.run_eval --session-id <buying-session-id> --verbose
+python tools/trace_session.py --sample-id public_0005
 ```
 
-Narrate over each turn as it prints:
-- Turn 1: point out the opening message already discloses category + one hard constraint; show the
-  agent's intent routing decision and initial retrieval pool size in the logged rationale.
-- A middle turn where the agent asks a clarifying question: point out *why* — the logged entropy
-  value crossing the calibrated threshold — not just that it asked something.
-- The hit turn: point out the rank of the target `parent_asin` in the returned top-10 and which
-  turn it landed on, and connect that back to MRR/MTTC directly.
+First run after a fresh checkout hits the network once for the two bundled models (`Warning: ...
+unauthenticated requests to the HF Hub` — harmless, just the local dev cache warming; the actual
+submission bundles both models locally per `docs/SUBMISSION_README.md`, so this line never appears
+in the scored path). Silence that warning or trim it in editing if it looks noisy on screen.
+
+Narrate over each turn as it prints (matches the actual `public_0005` trace):
+- Turn 1: the opening message already discloses category ("Outdoor & Work Snow & Cold Weather")
+  and one hard constraint ("leather") — point out this is the Buying-scenario's defining trait, and
+  that the agent asks about color next rather than committing immediately, because the pool is
+  still too broad.
+- Turn 3: the customer's reply itself reveals a new, richer constraint (an actual product
+  description snippet) in response to the agent's use_case question — point out this is the
+  simulator's *reactive-only* disclosure model (`wiki/09_simulator_mechanics.md`): the agent has to
+  ask the right thing to get this, it's never volunteered.
+- The hit: target `B074G1JP8Z` lands at **rank 1** on **turn 3** — connect this directly to the
+  scoring formula on screen (`reciprocal_rank = 1/rank`, `MTTC` counts turns like this one).
 
 ## Section 4 — Honest results + what was tried and cut (60–90s)
 
@@ -91,8 +98,6 @@ Show `wiki/INDEX.md` or the repo's file tree for the last few seconds.
 
 - **Confirm** the terminal-recording format above is acceptable (vs. a more produced alternative) —
   proceeding on this default per auto-mode guidance; flag if a different format is wanted.
-- **Pick the actual session ID** to trace live — should be chosen once, in advance, not live on
-  camera (avoids an unlucky miss scenario on the recording).
-- If `tools/run_eval.py` doesn't yet have a clean single-session `--verbose` trace mode, add one
-  before recording — this is a small, low-risk addition, not a scored-path change.
+- Session ID is already chosen and verified (`public_0005`, hits turn 3 rank 1) — `tools/
+  trace_session.py` is built, tested, and produces the exact trace narrated above.
 - Upload target: YouTube, **public** (required for Devpost linking).
