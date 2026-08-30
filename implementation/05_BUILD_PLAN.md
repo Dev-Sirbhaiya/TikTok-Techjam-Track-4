@@ -448,12 +448,14 @@ inconsistent throughput in the dev sandbox and the official environment's perfor
 characteristics are unknown.
 
 ### 5.3 — README + reproducibility check
-Project overview, setup/install steps, exact run command, disclosed model choice/cost/latency/offline-
-fallback, limitations & what you'd improve with more time, contribution breakdown. Actually re-run the
-documented steps from a clean checkout to confirm reproducibility (submission rules: failing this "may
-be treated as invalid") — **including one run with network access disabled**, per 5.2's offline-model
-fix, since "may run with network access disabled" is stated explicitly in `docs/submission_rules.md`
-and should be verified, not assumed.
+
+**Done (2026-08-30).** Written to `docs/SUBMISSION_README.md` (tracked source; `tools/
+build_submission.py` copies it into `submission/README.md` on every build, so it survives
+regeneration) — project overview, setup/install steps, exact run command, disclosed model
+choice/cost/latency/offline-fallback, limitations & what would be improved with more time
+(including the honestly-declined ideas, not just what shipped), contribution breakdown. The
+reproducibility check itself (clean-checkout run, network disabled) was already done as part of
+5.2 — see that section and `06_DECISION_LOG.md` D-EMBED-CACHE for the actual verification.
 
 ### 5.4 — Demo video
 Walkthrough of inference/API usage across at least one full multi-turn session (no UI required — the

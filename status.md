@@ -59,16 +59,17 @@ reproducibility) are **done** — see `implementation/05_BUILD_PLAN.md`'s Phase 
 detail. `tools/build_submission.py` regenerates `submission/` (gitignored, a build artifact) from
 scratch any time; re-run it if `src/copilot/` changes before the actual submission.
 
-**Remaining**: 5.3 (write the README itself — setup/install steps, exact run command, disclosed
-model choice/cost/latency/offline-fallback, limitations & what you'd improve with more time,
-contribution breakdown; the reproducibility CHECK itself is already done, just the document isn't
-written yet), 5.4 (demo video — a multi-turn session walkthrough, no UI required), 5.5 (Devpost
+5.3 is also **done**: `docs/SUBMISSION_README.md` (tracked source, copied into `submission/
+README.md` by the build script) covers approach, setup, run command, model/cost/latency/offline
+disclosure, limitations, and contribution breakdown.
+
+**Remaining**: 5.4 (demo video — a multi-turn session walkthrough, no UI required; needs the
+user's input on scope/format, `implementation/09_SUPERVISOR_QUESTIONS.md` SQ4), 5.5 (Devpost
 written submission — cross-reference `implementation/02_TECHNICAL_PRD.md`'s deliverable checklist).
-Before writing the writeup, re-read `implementation/06_DECISION_LOG.md` in full — it now contains a
-complete, honest "tried, measured, kept/cut" record across every phase, exactly the Technical
-Execution narrative material the competition rewards. Confirm
-`implementation/09_SUPERVISOR_QUESTIONS.md`'s open items (SQ3-SQ5: team/demo/workshop notes) before
-finalizing.
+Before writing the Devpost writeup, re-read `implementation/06_DECISION_LOG.md` in full — it now
+contains a complete, honest "tried, measured, kept/cut" record across every phase, exactly the
+Technical Execution narrative material the competition rewards. Confirm
+`implementation/09_SUPERVISOR_QUESTIONS.md`'s open items (SQ3, SQ5 too) before finalizing.
 
 ## Blockers
 
