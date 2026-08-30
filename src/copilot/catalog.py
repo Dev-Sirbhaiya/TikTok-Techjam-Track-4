@@ -187,13 +187,20 @@ class CatalogIndex:
         self._by_color: dict[str, set[str]] = defaultdict(set)
         self._by_style: dict[str, set[str]] = defaultdict(set)
         # Phase 5.10: BM25F (field-weighted BM25), gated behind strategy_config.ENABLE_BM25F, off
-        # by default pending ablation -- see bm25f_search()'s docstring. Built alongside the plain
-        # BM25 index unconditionally (cheap, one-time) so the flag can be flipped without a rebuild.
+        # by default pending ablation -- see bm25f_search()'s docstring.
+        # CORRECTED (self-caught via profiling, 2026-08-30): this was originally built
+        # unconditionally alongside the plain BM25 index, on the assumption that tokenizing each
+        # product a second and third time (for the high/low field groups) was "cheap, one-time."
+        # Profiling showed it TRIPLED CatalogIndex construction's dominant cost (tokenize() calls:
+        # 50k -> 150k) even when ENABLE_BM25F is False (the default, and what every run this
+        # session actually used) -- turning an ~11-13s one-time cost into ~55-90s. Only build these
+        # extra indices when the flag is actually on.
         self._inverted_high: dict[str, dict[str, int]] = defaultdict(dict)  # title/brand/category
         self._inverted_low: dict[str, dict[str, int]] = defaultdict(dict)   # description/features/details
         self._doc_len_high: dict[str, int] = {}
         self._doc_len_low: dict[str, int] = {}
-        self._build_bm25_and_metadata()
+        from .strategy_config import ENABLE_BM25F
+        self._build_bm25_and_metadata(build_bm25f=ENABLE_BM25F)
 
         self._embed_model = None
         self._embeddings: Optional["np.ndarray"] = None  # type: ignore[name-defined]
@@ -201,7 +208,7 @@ class CatalogIndex:
         self._dense_failed = False
 
     # ---------- BM25 (plain, dependency-free — see D-BM25 in wiki/03_design_log.md) ----------
-    def _build_bm25_and_metadata(self) -> None:
+    def _build_bm25_and_metadata(self, build_bm25f: bool = False) -> None:
         ratings = [p["average_rating"] for p in self.products.values()
                    if isinstance(p.get("average_rating"), (int, float))]
         # Phase 5.8: catalog-wide mean, computed once, for phase2/quality_boost.py's Bayesian
@@ -215,16 +222,17 @@ class CatalogIndex:
             for t, count in tf.items():
                 self._inverted[t][pid] = count
 
-            high_text = " ".join(_flatten(p.get("title")) + _flatten(p.get("store")) + _flatten(p.get("categories")))
-            low_text = " ".join(_flatten(p.get("features")) + _flatten(p.get("description")) + _flatten(p.get("details")))
-            high_tokens = tokenize(high_text)
-            low_tokens = tokenize(low_text)
-            self._doc_len_high[pid] = len(high_tokens)
-            self._doc_len_low[pid] = len(low_tokens)
-            for t, count in Counter(high_tokens).items():
-                self._inverted_high[t][pid] = count
-            for t, count in Counter(low_tokens).items():
-                self._inverted_low[t][pid] = count
+            if build_bm25f:
+                high_text = " ".join(_flatten(p.get("title")) + _flatten(p.get("store")) + _flatten(p.get("categories")))
+                low_text = " ".join(_flatten(p.get("features")) + _flatten(p.get("description")) + _flatten(p.get("details")))
+                high_tokens = tokenize(high_text)
+                low_tokens = tokenize(low_text)
+                self._doc_len_high[pid] = len(high_tokens)
+                self._doc_len_low[pid] = len(low_tokens)
+                for t, count in Counter(high_tokens).items():
+                    self._inverted_high[t][pid] = count
+                for t, count in Counter(low_tokens).items():
+                    self._inverted_low[t][pid] = count
             for part in _normalized_category_parts(p.get("categories") or []):
                 if part in self.gazetteer["categories"]:
                     self._by_category[part].add(pid)

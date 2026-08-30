@@ -609,15 +609,24 @@ def test_ensure_cross_encoder_ready_degrades_gracefully_on_load_failure():
 
 
 def test_bm25f_ranks_title_match_above_description_only_match():
-    products = {
-        "title_match": {"title": "Red Leather Jacket", "description": "A stylish outer layer.",
-                         "categories": ["jackets"]},
-        "desc_match": {"title": "Winter Coat", "description": "Made from red leather accents.",
-                        "categories": ["jackets"]},
-    }
-    index = CatalogIndex(products, GAZETTEER)
-    ranked = index.bm25f_search("red leather")
-    assert ranked[0] == "title_match"  # title/category field weighted above description
+    # The BM25F index is only built when ENABLE_BM25F is on at construction time (self-caught via
+    # profiling: building it unconditionally tripled CatalogIndex construction's dominant cost even
+    # when the flag defaults to False) -- enable it before constructing, not after.
+    import copilot.strategy_config as strategy_config
+    original = strategy_config.ENABLE_BM25F
+    strategy_config.ENABLE_BM25F = True
+    try:
+        products = {
+            "title_match": {"title": "Red Leather Jacket", "description": "A stylish outer layer.",
+                             "categories": ["jackets"]},
+            "desc_match": {"title": "Winter Coat", "description": "Made from red leather accents.",
+                            "categories": ["jackets"]},
+        }
+        index = CatalogIndex(products, GAZETTEER)
+        ranked = index.bm25f_search("red leather")
+        assert ranked[0] == "title_match"  # title/category field weighted above description
+    finally:
+        strategy_config.ENABLE_BM25F = original
 
 
 def test_multi_interest_seed_is_noop_if_already_updated():
