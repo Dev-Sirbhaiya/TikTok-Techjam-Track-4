@@ -532,6 +532,33 @@ def test_apply_hard_filters_extended_attrs_off_keeps_category_only_behavior():
         strategy_config.EXTENDED_HARD_FILTER_ATTRS = original
 
 
+def test_material_index_covers_every_mentioned_material_not_just_the_first():
+    # Regression test (codex review, 2026-08-30): a product mentioning multiple materials used to
+    # be indexed under only the first regex match, wrongly excluding it when a customer discloses
+    # a different, genuinely-present material.
+    products = {
+        "cotton_denim": {"title": "Cotton denim jacket", "categories": ["shoes"]},
+    }
+    index = CatalogIndex(products, GAZETTEER)
+    assert "cotton_denim" in index._by_material.get("cotton", set())
+    assert "cotton_denim" in index._by_material.get("denim", set())
+
+
+def test_apply_hard_filters_extended_attrs_normalizes_labeled_disclosed_value():
+    # Regression test (codex review, 2026-08-30): the simulator's own intent_card() labels some
+    # disclosed values as "color: red" rather than a bare word -- an exact-match lookup against
+    # that phrase must still resolve to the "red" index entry, not silently match nothing.
+    import copilot.strategy_config as strategy_config
+    index = _tiny_shoe_catalog()
+    original = strategy_config.EXTENDED_HARD_FILTER_ATTRS
+    strategy_config.EXTENDED_HARD_FILTER_ATTRS = True
+    try:
+        ids = index.apply_hard_filters({"category": "shoes", "material": "material: leather"})
+        assert ids == {"leather_shoe"}
+    finally:
+        strategy_config.EXTENDED_HARD_FILTER_ATTRS = original
+
+
 def test_bayesian_quality_score_rewards_well_rated_well_reviewed_product():
     from copilot.phase2.quality_boost import bayesian_quality_score
     strong = bayesian_quality_score({"average_rating": 4.9, "rating_number": 5000}, global_mean_rating=4.2)
@@ -566,6 +593,19 @@ def test_multi_interest_seed_then_update_blends_not_overrides():
     # alpha=0.35: the real turn should have moved the vector away from the pure seed direction,
     # but the seed's influence (0.65 weight on the first blend) should still be visible.
     assert 0.0 < float(np.dot(state.vectors[0], seed)) < 1.0
+
+
+def test_ensure_cross_encoder_ready_degrades_gracefully_on_load_failure():
+    # Regression test (codex review, 2026-08-30): a genuine model-load failure at warm-up time
+    # must NOT propagate out of Agent.__init__ and abort agent construction -- NFR-2 requires the
+    # same graceful degradation a per-turn failure already gets inside rerank()'s own try/except.
+    import copilot.ranker as ranker
+    original = ranker._get_cross_encoder
+    ranker._get_cross_encoder = lambda: (_ for _ in ()).throw(RuntimeError("model unavailable"))
+    try:
+        ranker.ensure_cross_encoder_ready()  # must not raise
+    finally:
+        ranker._get_cross_encoder = original
 
 
 def test_bm25f_ranks_title_match_above_description_only_match():

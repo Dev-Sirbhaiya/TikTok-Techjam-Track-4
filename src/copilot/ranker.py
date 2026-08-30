@@ -97,10 +97,20 @@ def ensure_cross_encoder_ready() -> None:
     per-session risk, but it still needlessly put a large, avoidable cost inside a SCORED turn's
     response window rather than the unscored construction window -- exactly the failure mode
     NFR-4/D-LATENCY's "design defensively, don't assume an unpublished timeout won't bite" warns
-    about. Agent.__init__ calls this once, same pattern as the dense model."""
-    _get_cross_encoder()
-    if ENABLE_CROSS_ENCODER_ENSEMBLE:
-        _get_cross_encoder_2()
+    about. Agent.__init__ calls this once, same pattern as the dense model.
+
+    CORRECTED per codex review (2026-08-30): this used to let a genuine load failure (missing
+    model, no network, corrupted files) propagate straight out of Agent.__init__ and abort agent
+    construction entirely -- a strictly worse failure mode than before this fix, when the same
+    failure was caught inside rerank()'s own try/except and degraded gracefully to fused-score
+    ordering (NFR-2: never a hard dependency). Warm-up failures must degrade the same way a
+    per-turn failure would, not turn an optional latency optimization into a new hard dependency."""
+    try:
+        _get_cross_encoder()
+        if ENABLE_CROSS_ENCODER_ENSEMBLE:
+            _get_cross_encoder_2()
+    except Exception:
+        pass  # rerank()'s own try/except will retry lazily and fall back to fused-score order
 
 
 def _state_to_query_text(state, query_terms: list[str]) -> str:

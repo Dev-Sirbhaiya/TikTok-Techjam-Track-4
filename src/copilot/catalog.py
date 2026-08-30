@@ -241,16 +241,19 @@ class CatalogIndex:
             # Same regex vocabulary _attributes_for() uses for candidate-side facet values, so a
             # slot's extracted value (nlu.py's classify_value_attribute, which shares this same
             # gazetteer-derived vocabulary) matches consistently on both sides.
+            # CORRECTED per codex review (2026-08-30): this used to index only the FIRST regex
+            # match per product (.search()), so a product mentioning multiple materials/colors/
+            # styles (e.g. "cotton denim jacket") was indexed under only one of them -- a customer
+            # disclosing the OTHER valid, genuinely-present value (e.g. "cotton") would then have
+            # the true target wrongly excluded by the hard filter, even though the product legitimately
+            # matches. Index every distinct match, not just the first.
             lowered = text.lower()
-            material_match = _MATERIAL_RE.search(lowered)
-            if material_match:
-                self._by_material[material_match.group(1)].add(pid)
-            color_match = _COLOR_RE.search(lowered)
-            if color_match:
-                self._by_color[color_match.group(1)].add(pid)
-            style_match = _STYLE_RE.search(lowered)
-            if style_match:
-                self._by_style[style_match.group(1)].add(pid)
+            for material in set(_MATERIAL_RE.findall(lowered)):
+                self._by_material[material].add(pid)
+            for color in set(_COLOR_RE.findall(lowered)):
+                self._by_color[color].add(pid)
+            for style in set(_STYLE_RE.findall(lowered)):
+                self._by_style[style].add(pid)
 
         n_docs = len(self.products)
         self._avg_doc_len = (sum(self._doc_len.values()) / n_docs) if n_docs else 0.0
@@ -383,11 +386,24 @@ class CatalogIndex:
         # validation ablation -- see that flag's docstring.
         from .strategy_config import EXTENDED_HARD_FILTER_ATTRS
         if EXTENDED_HARD_FILTER_ATTRS:
-            for slot_key, index in (("material", self._by_material), ("color", self._by_color),
-                                     ("style", self._by_style)):
+            # CORRECTED per codex review (2026-08-30): this used to look up the slot's RAW disclosed
+            # value directly (`value.lower() in index`), but the simulator's own intent_card() labels
+            # some disclosed values as e.g. "color: red" (see the organizer's evaluator source) rather
+            # than a bare word -- an exact-match lookup against that phrase against an index keyed by
+            # bare words like "red" silently never matches, quietly disabling color filtering for
+            # exactly this common, standard disclosure format. Re-apply the same regex used to BUILD
+            # the index to the slot's raw value first, extracting the canonical token before lookup,
+            # so a labeled phrase and a bare word both resolve to the same index key.
+            for slot_key, index, pattern in (("material", self._by_material, _MATERIAL_RE),
+                                              ("color", self._by_color, _COLOR_RE),
+                                              ("style", self._by_style, _STYLE_RE)):
                 value = slots.get(slot_key)
-                if value and value.lower() in index:
-                    attr_ids = index[value.lower()]
+                if not value:
+                    continue
+                match = pattern.search(str(value).lower())
+                canonical = match.group(1) if match else str(value).lower()
+                if canonical in index:
+                    attr_ids = index[canonical]
                     ids = attr_ids if ids is None else (ids & attr_ids)
         return ids
 

@@ -10,14 +10,22 @@ or a ranking problem (target reaches the pool but never gets reranked into the t
 monkeypatches `retrieve_candidates` at the point `agent.py` calls it (no scored file is edited) to
 record pool membership per turn, then replays the real simulator loop.
 
-This is pure measurement, not a tuned/selected change -- safe to run against the full 200-session
-set (no train/validation split concern; nothing here is being optimized against the result).
+CORRECTED per codex review (2026-08-30): the original version of this docstring claimed running
+against the full 200-session set was "safe, no train/validation split concern" -- WRONG. This
+diagnostic's OWN findings were what proposed EXTENDED_HARD_FILTER_ATTRS in the first place, so
+running it against all 200 sessions let the 40 held-out validation sessions' hidden targets inform
+the proposal, contaminating the later "+14.8% on held-out validation" confirmation -- exactly the
+peeking `implementation/10_PRE_REGISTRATION.md` exists to prevent, just via a diagnostic instead of
+a direct evaluator sweep. Use `--split training` for anything that will inform a fix proposal;
+`--split validation` or no split at all is fine only for after-the-fact analysis of an
+already-shipped, already-decided change (never to decide what to try next).
 
-Usage: python tools/diagnose_buying_recall.py [--scenario buying]
+Usage: python tools/diagnose_buying_recall.py [--scenario buying] [--split training|validation]
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -27,6 +35,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PARTICIPANT_REPO = REPO_ROOT / "external" / "techjam-conversational-search"
+SPLIT_PATH = REPO_ROOT / "tools" / "session_split.json"
 MAX_TURNS = 10
 TOP_K = 10
 
@@ -39,6 +48,10 @@ def main() -> None:
                          help="Force route_retrieval_breadth() to always return False, isolating "
                               "whether the hard filter itself (vs. underlying BM25/dense/metadata "
                               "recall) is responsible for targets never reaching the pool.")
+    parser.add_argument("--split", choices=["training", "validation"], default=None,
+                         help="Restrict to one side of tools/session_split.json's pre-registered "
+                              "split. Use 'training' before proposing a fix based on this "
+                              "diagnostic's findings -- see the module docstring.")
     args = parser.parse_args()
 
     subprocess.run([sys.executable, str(REPO_ROOT / "tools" / "install_shim.py")], check=True, cwd=REPO_ROOT)
@@ -66,6 +79,9 @@ def main() -> None:
 
     catalog_ids, categories, products = catalog_index(PARTICIPANT_REPO / "data" / "catalog.jsonl")
     samples = load_jsonl(PARTICIPANT_REPO / "data" / "public_set.jsonl")
+    if args.split:
+        keep_ids = set(json.loads(SPLIT_PATH.read_text(encoding="utf-8"))[args.split])
+        samples = [s for s in samples if s["sample_id"] in keep_ids]
     if args.scenario:
         samples = [s for s in samples if s["scenario_type"] == args.scenario]
 
@@ -91,7 +107,13 @@ def main() -> None:
         for turn in range(1, MAX_TURNS + 1):
             pool_ids_this_turn.clear()
             response = agent.respond(session_id, user_message, turn, TOP_K)
-            if target in pool_ids_this_turn:
+            # CORRECTED per codex review (2026-08-30): for intent_override sessions, turns before
+            # the forced override use the OLD (soon-to-be-invalidated) preference and can never
+            # count as a scored hit -- the real evaluator gates on this too (see local_evaluator.py's
+            # `if override_applied and target in ranked`). Counting pre-override pool membership
+            # here misclassified genuine post-override retrieval misses as "in pool, just not
+            # top-10", skewing exactly the recall-vs-ranking distinction this tool exists to measure.
+            if override_applied and target in pool_ids_this_turn:
                 ever_in_pool = True
             ranked = normalize_recommendations(response.get("recommendations"), catalog_ids)
             if override_applied and target in ranked:
