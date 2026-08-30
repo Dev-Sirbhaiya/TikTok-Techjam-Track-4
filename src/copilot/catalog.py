@@ -179,6 +179,13 @@ class CatalogIndex:
         self._by_category: dict[str, set[str]] = defaultdict(set)
         self._by_brand: dict[str, set[str]] = defaultdict(set)
         self._price: dict[str, Optional[float]] = {}
+        # Phase 5.6 investigation (wiki/03_design_log.md, tools/diagnose_buying_recall.py): built
+        # once at load time (same pattern as _by_category/_by_brand) so apply_hard_filters() can
+        # optionally restrict on these too, gated behind strategy_config.EXTENDED_HARD_FILTER_ATTRS
+        # -- see that flag's docstring for why this is off by default pending ablation.
+        self._by_material: dict[str, set[str]] = defaultdict(set)
+        self._by_color: dict[str, set[str]] = defaultdict(set)
+        self._by_style: dict[str, set[str]] = defaultdict(set)
         self._build_bm25_and_metadata()
 
         self._embed_model = None
@@ -189,7 +196,8 @@ class CatalogIndex:
     # ---------- BM25 (plain, dependency-free — see D-BM25 in wiki/03_design_log.md) ----------
     def _build_bm25_and_metadata(self) -> None:
         for pid, p in self.products.items():
-            tokens = tokenize(searchable_text(p))
+            text = searchable_text(p)
+            tokens = tokenize(text)
             self._doc_len[pid] = len(tokens)
             tf: Counter[str] = Counter(tokens)
             for t, count in tf.items():
@@ -206,6 +214,20 @@ class CatalogIndex:
                 self._by_brand[str(store).strip().lower()].add(pid)
             price = p.get("price")
             self._price[pid] = float(price) if isinstance(price, (int, float)) else None
+
+            # Same regex vocabulary _attributes_for() uses for candidate-side facet values, so a
+            # slot's extracted value (nlu.py's classify_value_attribute, which shares this same
+            # gazetteer-derived vocabulary) matches consistently on both sides.
+            lowered = text.lower()
+            material_match = _MATERIAL_RE.search(lowered)
+            if material_match:
+                self._by_material[material_match.group(1)].add(pid)
+            color_match = _COLOR_RE.search(lowered)
+            if color_match:
+                self._by_color[color_match.group(1)].add(pid)
+            style_match = _STYLE_RE.search(lowered)
+            if style_match:
+                self._by_style[style_match.group(1)].add(pid)
 
         n_docs = len(self.products)
         self._avg_doc_len = (sum(self._doc_len.values()) / n_docs) if n_docs else 0.0
@@ -287,6 +309,24 @@ class CatalogIndex:
         if isinstance(budget_max, (int, float)):
             price_ids = {pid for pid, price in self._price.items() if price is not None and price <= budget_max}
             ids = price_ids if ids is None else (ids & price_ids)
+
+        # Phase 5.6 investigation: apply_hard_filters previously only restricted on category/brand/
+        # budget, never on the disclosed material/color/style hard constraint itself -- diagnosed via
+        # tools/diagnose_buying_recall.py after finding 37.5% of buying-scenario targets never reach
+        # the candidate pool at all (vs. 26.2% for browsing), and confirming with --no-hard-filter
+        # that toggling the EXISTING filter changes nothing (because it was already only ever
+        # filtering on category for most buying sessions -- brand is structurally almost never
+        # disclosed per resolved-Q2, and budget only sometimes). Gated behind
+        # strategy_config.EXTENDED_HARD_FILTER_ATTRS (default False) pending a proper train/
+        # validation ablation -- see that flag's docstring.
+        from .strategy_config import EXTENDED_HARD_FILTER_ATTRS
+        if EXTENDED_HARD_FILTER_ATTRS:
+            for slot_key, index in (("material", self._by_material), ("color", self._by_color),
+                                     ("style", self._by_style)):
+                value = slots.get(slot_key)
+                if value and value.lower() in index:
+                    attr_ids = index[value.lower()]
+                    ids = attr_ids if ids is None else (ids & attr_ids)
         return ids
 
     def hydrate(self, ids: list[str]) -> list[dict]:

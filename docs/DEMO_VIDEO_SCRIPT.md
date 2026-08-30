@@ -70,9 +70,9 @@ Narrate over each turn as it prints (matches the actual `public_0005` trace):
 
 ## Section 4 — Honest results + what was tried and cut (60–90s)
 
-> "On the 200-session public dev set, this scores 0.406 TechnicalScore against the organizer's
-> unmodified baseline of 0.107 — about 3.8x. With a local Claude API key present, an optional LLM
-> reranking pass pushes that to 0.430, but that's not the number we're reporting as the expected
+> "On the 200-session public dev set, this scores 0.471 TechnicalScore against the organizer's
+> unmodified baseline of 0.107 — about 4.4x. An optional LLM reranking pass adds a bit more when a
+> local Claude API key is present, but that's not the number we're reporting as the expected
 > competition score, since the organizer doesn't provide hosted credentials for official grading."
 
 Show the score progression table from `status.md` on screen for a few seconds.
@@ -82,9 +82,12 @@ Show the score progression table from `status.md` on screen for a few seconds.
 > metadata fusion signal, portfolio-style slate hedging, and a one-step lookahead question selector.
 > Every one of these was ablated on two independent data splits before a decision was made, and one
 > — slate hedging — actually shipped once, then got reversed after a code review caught that its
-> held-out validation result was a wash, not a real win. That's disclosed honestly in the writeup,
-> not hidden — the discipline of not shipping a change that only wins on the split you tuned it on
-> is itself part of the technical approach, not just a footnote."
+> held-out validation result was a wash, not a real win. What eventually worked was building a
+> diagnostic instead of guessing another fix: a small tool that measured whether the hidden target
+> even reached the retrieval pool at all. It found the Buying scenario's own hard filter wasn't
+> actually filtering on the thing that defines a buying request — extending it to do so raised the
+> overall score by 16%, the single biggest jump of the project. Every one of these attempts, failed
+> and successful, is disclosed honestly in the writeup, not just the wins."
 
 ## Section 5 — Close (15–20s)
 

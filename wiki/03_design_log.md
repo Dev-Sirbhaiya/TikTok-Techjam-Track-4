@@ -796,3 +796,63 @@ something caused by anything in this repo's diffs. **Revised process note**: sto
 "retry until it works" — after one retry with no verdict, accept manual review for that commit and
 move on; a third attempt bought no new information here and cost real time against the clock.
 `CLAUDE.md`'s guidance updated accordingly.
+
+## 2026-08-30 — Diagnosed and fixed the buying-track retrieval-recall gap (Phase 5.6): +15.9% TechnicalScore, the largest win of the project
+
+Every prior attempt at closing the persistent Buying-track gap (query-vector nudge, weighted RRF
+fusion, rerank-depth widening, slate hedging, 1-step lookahead question selection) started from a
+hypothesized *fix* and ablated it, without first measuring *why* buying specifically underperformed.
+Built `tools/diagnose_buying_recall.py` (not scored-path code) to close that gap: it monkeypatches
+`retrieve_candidates` at the point `agent.py` calls it (no scored file edited) to record, per turn,
+whether the hidden target ever reaches the fused/filtered candidate pool, then replays the real
+simulator loop over all 200 public sessions.
+
+**Result**: buying targets never reach the pool at all in 37.5% of sessions (vs. 26.2% for
+browsing), and reach the pool but never the top-10 in a further 23.8% (vs. 8.8% for browsing) — a
+near-even split between a pure retrieval-recall failure (unfixable by any amount of reranking) and a
+ranking failure, both far worse than browsing's numbers. This is the first *direct measurement* of
+the gap's shape, not an inference.
+
+**Follow-up isolation test**: re-ran the buying-only diagnostic with `route_retrieval_breadth`
+monkeypatched to always return `False` (hard filter forced off). Result was **byte-identical** to
+the baseline — 38.8%/23.8%/37.5%, no change at all. This proved the *existing* hard filter
+(`catalog.apply_hard_filters`) was already inert for buying's actual problem: reading the code
+showed it only ever restricts on `category`, `brand`, and `budget_max` — never on the disclosed
+hard-constraint attribute itself (material/color/style). Brand is structurally almost never
+disclosed (resolved-Q2: `classify_constraint()` has no branch for it), so for most buying sessions
+the "hard filter" reduces to "category filter," which barely narrows a 50,000-item catalog. The
+`route_retrieval_breadth` docstring's claim of "Buying-track precision" was aspirational, not real.
+
+**Fix**: `EXTENDED_HARD_FILTER_ATTRS` (new flag, `strategy_config.py`) also restricts the hard-filter
+pool on material/color/style when disclosed, via new `_by_material`/`_by_color`/`_by_style` catalog
+indices built once at load time using the exact same regex vocabulary `catalog._attributes_for()`
+already uses for candidate-side facet values (so a slot's extracted value and a candidate's attribute
+value are drawn from a consistent vocabulary, reducing — not eliminating — mismatch risk).
+
+**Known risk, measured rather than assumed away**: material/color/style are single-regex-match,
+best-effort values — a genuinely-matching product whose text mentions a different material/color
+first would be wrongly excluded, the same fragility resolved-Q7 already found in `details`. This is
+exactly the kind of thing that sank weighted RRF (reversed on validation) and slate hedging
+(validation wash) earlier this session, so it was ablated with the same rigor, not shipped on
+first-glance plausibility.
+
+**Ablation** (per `10_PRE_REGISTRATION.md`): training split (n=160) TechnicalScore 0.476056 vs
+baseline 0.441967 (+7.7%); validation split (n=40, held out, single-candidate run per
+`tune_strategy.py`'s enforced rule) TechnicalScore 0.445604 vs a fresh same-run baseline of 0.388292
+(**+14.8%**, HitRate@10 +16.7%, MRR +5.8%, MTTC improved). A clean win on BOTH splits — unlike every
+other buying-track attempt this session. **ENABLED by default.**
+
+**Full 200-session guaranteed-path exit: TechnicalScore 0.471193** (HitRate@10 0.55, MRR 0.347643,
+MTTC 6.405) — up from 0.406428, **+15.9%**, the single largest improvement of the entire project.
+Buying's own hit rate rose to 0.475 from roughly 0.36-0.39 across every prior measurement this
+session, closing most of the gap to browsing (0.6625).
+
+**A repeat run to double-check determinism, and a separate run to re-measure the optional LLM-
+booster ceiling on top of this fix, were both genuinely killed mid-flight by an external interrupt**
+(confirmed via `kill -0` on the actual process IDs, not just a `ps`-based check that had earlier given
+a false "already exited" reading on the same PID — a real lesson: `ps aux`-based grep checks against
+long-running Windows/git-bash subprocesses are unreliable for detecting whether a process is still
+alive, use `kill -0 <pid>` instead). Neither produced a result and neither was re-attempted given the
+interrupt pattern (three background tasks killed within minutes of each other). This doesn't weaken
+the headline number — it's backed by two independent, directionally-consistent prior runs (training +
+validation) — but the optional-ceiling number is now stale and not re-measured on top of this fix.

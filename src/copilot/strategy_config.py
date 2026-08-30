@@ -25,6 +25,13 @@ def _int(name: str, default: int) -> int:
     return int(v) if v is not None else default
 
 
+def _bool(name: str, default: bool) -> bool:
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "on")
+
+
 # overgenerality.should_clarify: the base entropy threshold above which a turn is a clarification
 # candidate at all (before phase2/voi.py's disagreement-based adjustment). Phase 0's initial guess.
 # Phase 3.1 systematically swept this against the training split (tools/tune_strategy.py) and found
@@ -65,6 +72,22 @@ NEG_BOOST_WEIGHT = _float("COPILOT_NEG_BOOST_WEIGHT", 0.10)
 # than a single global weight.
 METADATA_RRF_WEIGHT = _float("COPILOT_METADATA_RRF_WEIGHT", 1.0)
 
+# catalog.apply_hard_filters: whether to ALSO hard-restrict on disclosed material/color/style slots,
+# not just category/brand/budget. Added 2026-08-30 after tools/diagnose_buying_recall.py found
+# 37.5% of buying-scenario targets never reach the fused candidate pool at all (vs. 26.2% for
+# browsing), and a --no-hard-filter run confirmed toggling the EXISTING filter changes nothing for
+# buying (it only ever restricted on category for most buying sessions -- brand is structurally
+# almost never disclosed per resolved-Q2, budget only sometimes). Ablated on both splits despite the
+# real risk that material/color/style being single-regex-match, best-effort catalog attributes
+# (catalog._attributes_for) could wrongly exclude a genuinely-matching product whose text mentions a
+# different material/color first: training (n=160) TechnicalScore 0.476056 vs baseline 0.441967
+# (+7.7%); validation (n=40, held out) TechnicalScore 0.445604 vs baseline 0.388292 (+14.8%,
+# HitRate@10 +16.7%, MRR +5.8%, MTTC improved) -- a clean win on BOTH splits, not a training-only
+# mirage. **ENABLED by default** per the pre-registration's own accept rule (held-out split
+# confirms). See wiki/08_evaluation_log.md for the full ablation and wiki/03_design_log.md for the
+# diagnostic that found this.
+EXTENDED_HARD_FILTER_ATTRS = _bool("COPILOT_EXTENDED_HARD_FILTER_ATTRS", True)
+
 
 def as_dict() -> dict:
     """For logging a run's exact effective config next to its evaluator result."""
@@ -75,4 +98,5 @@ def as_dict() -> dict:
         "VOI_DISAGREEMENT_WEIGHT": VOI_DISAGREEMENT_WEIGHT,
         "NEG_BOOST_WEIGHT": NEG_BOOST_WEIGHT,
         "METADATA_RRF_WEIGHT": METADATA_RRF_WEIGHT,
+        "EXTENDED_HARD_FILTER_ATTRS": EXTENDED_HARD_FILTER_ATTRS,
     }

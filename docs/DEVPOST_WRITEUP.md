@@ -62,9 +62,9 @@ sessions), with every non-trivial change validated on a held-out split before be
 
 ## Accomplishments we're proud of
 
-- **TechnicalScore 0.406** on the full 200-session public dev set (`Hit Rate@10 = 0.485`,
-  `MRR = 0.278`, `MTTC = 6.98`), against the organizer's unmodified baseline of **0.107** — roughly
-  a **3.8x** improvement, with zero required LLM calls in the scored path.
+- **TechnicalScore 0.471** on the full 200-session public dev set (`Hit Rate@10 = 0.55`,
+  `MRR = 0.348`, `MTTC = 6.41`), against the organizer's unmodified baseline of **0.107** — roughly
+  a **4.4x** improvement, with zero required LLM calls in the scored path.
 - A named, logged adaptive orchestrator (`orchestration_decisions` in the per-turn rationale log) —
   every retrieval-breadth, rerank-depth, and turn-policy decision is explainable after the fact, not
   a black box.
@@ -76,19 +76,25 @@ sessions), with every non-trivial change validated on a held-out split before be
 
 The honest accounting matters more here than a highlight reel:
 
-- **Buying and Intent-Override scenarios lag Browsing/Boundary in hit rate.** Several targeted
-  fixes were tried — widening the reranked candidate pool, reweighting the metadata fusion signal,
-  a query-embedding nudge toward accumulated preference, portfolio-style "slate hedging" for
-  high-uncertainty commits — every one honestly ablated on two independent data splits. Most
-  regressed or failed to replicate on held-out data outright. One, slate hedging, initially looked
+- **The Buying scenario lagged Browsing/Boundary in hit rate for most of development — several
+  fixes failed before one actually worked, and the difference was measuring the problem first.**
+  Early attempts — widening the reranked candidate pool, reweighting the metadata fusion signal, a
+  query-embedding nudge toward accumulated preference, portfolio-style "slate hedging" for
+  high-uncertainty commits — were all honestly ablated on two independent data splits, and all
+  either regressed or failed to replicate on held-out data. One, slate hedging, initially looked
   like a real win on the training split and shipped — then an adversarial code review caught that
-  its held-out validation result was a genuine wash (identical Hit Rate@10 with or without it), not
-  a confirmed improvement, and that the reasoning used to justify shipping anyway ("the validation
-  sample is probably just underpowered") was exactly the kind of post-hoc rationalization the
-  project's own pre-registered evaluation protocol exists to rule out. It was reversed. That gap in
-  the Buying track is real and unresolved — the design log documents exactly what was tried and why
-  each attempt didn't hold up, which is itself useful signal that the bottleneck likely lives in
-  retrieval precision under hard filtering, not clarification-turn policy.
+  its held-out validation result was a genuine wash (identical Hit Rate@10 with or without it), and
+  that the reasoning used to justify shipping anyway ("the validation sample is probably just
+  underpowered") was exactly the kind of post-hoc rationalization the project's own pre-registered
+  evaluation protocol exists to rule out. It was reversed. What actually moved the needle was
+  building a diagnostic instead of guessing another fix: a small tool that directly measured whether
+  the hidden target ever reached the retrieval candidate pool at all. It found 37.5% of Buying
+  sessions never did — and proved the pipeline's own "Buying-track hard filter" had zero effect on
+  this, because it only ever restricted on category/brand/budget, never on the disclosed
+  material/color/style constraint that actually defines a buying request. Extending it to those
+  attributes, ablated with the same rigor as every failed attempt before it, raised the overall
+  TechnicalScore by 15.9% — the largest single improvement of the project, and the one that finally
+  closed most of the Buying gap.
 - **A code-review process gap of our own making.** A batch of automated code reviews appeared to
   fail outright (short, incomplete-looking output) and were logged as an environment limitation for
   several hours. It turned out several of them had actually completed successfully — the verdict
@@ -102,18 +108,26 @@ The honest accounting matters more here than a highlight reel:
 
 ## What we learned
 
-Ablation discipline only works if it's applied to *itself*, not just to the feature being tested —
-the slate-hedging reversal above happened specifically because a validation-split "wash" was almost
-rationalized away as measurement noise instead of a real answer. The most valuable technical
-artifact this project produced may not be the retrieval pipeline itself but the habit of writing
-down, and honoring, a pre-registered accept/reject rule before looking at the result.
+Two things, both about process more than any single technique. First, ablation discipline only
+works if it's applied to *itself*, not just to the feature being tested — the slate-hedging
+reversal happened specifically because a validation-split "wash" was almost rationalized away as
+measurement noise instead of a real answer. Second, and more costly in hindsight: several
+consecutive fix attempts for the Buying gap failed before we tried actually measuring *where* the
+gap lived instead of guessing another plausible mechanism. A 20-minute diagnostic script would have
+saved several of those earlier detours. The most valuable technical habit this project reinforced
+isn't any specific retrieval technique — it's writing down and honoring a pre-registered
+accept/reject rule before looking at a result, and building the measurement before reaching for the
+next fix.
 
 ## What's next
 
+- Apply the same "measure before you fix" approach to the Intent Override scenario, now the weakest
+  remaining one, instead of guessing at heuristics the way early Buying-track attempts did.
+- The material/color/style hard-filter extension is a single regex-match per attribute; a smarter
+  multi-value or fuzzy match could recover more of the remaining ~24% of Buying sessions where the
+  target reaches the pool but still doesn't make the final top-10 — a ranking problem, not recall.
 - A genuine offline optimization loop over a wider hyperparameter space (only a targeted sweep was
   run here).
-- A deeper investigation into *why* the retrieval pipeline specifically underperforms on
-  hard-filtered (Buying-track) pools, rather than only tuning around the symptom.
 - The one-step "world-model-lite" lookahead question selector was built and correctly declined
   (didn't clear a higher bar than the existing entropy heuristic); a two-step extension was never
   attempted given that result, but remains a plausible next experiment if the underlying entropy

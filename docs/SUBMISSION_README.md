@@ -68,22 +68,29 @@ expected for official evaluation.
 
 ## Limitations and what I'd improve with more time
 
-- **`buying` and `intent_override` scenarios lag `browsing`/`boundary` in hit rate.** Several
-  targeted fixes were tried (widening the reranked candidate pool, reweighting the metadata fusion
-  leg, a query-embedding nudge toward accumulated preference, portfolio/slate hedging for
-  high-uncertainty commits) — all were honestly ablated on two independent data splits, and all
-  either regressed or failed to replicate on held-out data (one, slate hedging, initially looked
-  like a win on the training split but was correctly reversed after an adversarial review caught
-  that its held-out validation result was a genuine wash, not a confirmed improvement). The gap is
-  real and unresolved; the design log documents exactly what was tried and why each attempt didn't
-  hold up, which is itself useful signal for where the actual bottleneck likely lives (retrieval
-  precision under hard filtering, not just clarification-turn policy).
+- **`buying` lagged `browsing`/`boundary` in hit rate for most of development — root-caused and
+  largely fixed.** Several targeted heuristic fixes were tried first (widening the reranked
+  candidate pool, reweighting the metadata fusion leg, a query-embedding nudge toward accumulated
+  preference, portfolio/slate hedging for high-uncertainty commits) — all honestly ablated on two
+  independent data splits, and all either regressed or failed to replicate on held-out data (one,
+  slate hedging, initially looked like a win on the training split but was correctly reversed after
+  an adversarial review caught that its held-out validation result was a genuine wash). What
+  actually closed most of the gap was building a diagnostic *first* instead of guessing another fix:
+  it directly measured that 37.5% of buying-scenario targets never reached the retrieval candidate
+  pool at all, and proved the existing "Buying-track hard filter" was doing almost nothing about
+  it — it only ever restricted on category/brand/budget, never on the disclosed material/color/style
+  constraint that actually defines a buying session. Extending it to those attributes (ablated the
+  same way as everything else — training +7.7%, held-out validation +14.8% TechnicalScore) raised
+  the overall score by +15.9%, the largest single improvement of the project. `intent_override`
+  remains the weakest scenario; not yet investigated with the same rigor.
 - **A 1-step "world-model-lite" lookahead for question selection was built and ablated but declined**
   — it didn't clear a higher bar than the existing entropy heuristic, exactly as predicted before
   building it. A 2-step extension was not attempted given the 1-step result.
-- With more time: a genuine offline SkillOpt-style optimization loop over a wider hyperparameter
-  space (only a targeted sweep was run here), and a deeper investigation into why the retrieval
-  pipeline specifically underperforms on hard-filtered (Buying-track) pools.
+- With more time: apply the same "measure before you fix" diagnostic approach to `intent_override`;
+  a genuine offline SkillOpt-style optimization loop over a wider hyperparameter space (only a
+  targeted sweep was run here); the material/color/style hard-filter extension is still a single
+  regex-match per attribute, so a smarter multi-value or fuzzy match could recover more of the
+  remaining 23.8% "in-pool-but-not-top-10" buying cases.
 - An adversarial code review late in development caught two submission-breaking bugs before they
   shipped (a model/cache path that resolved against the wrong working directory, and a build script
   that could silently produce an incomplete bundle) — a reminder that offline/reproducibility

@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from copilot.catalog import _normalized_category_parts, coarse_category, price_bucket
+from copilot.catalog import CatalogIndex, _normalized_category_parts, coarse_category, price_bucket
 from copilot.nlu import extract_slot_updates, classify_value_attribute, apply_extraction
 from copilot.overgenerality import score_entropy, should_clarify, select_best_question, _facet_value_entropy
 from copilot.rejection_memory import detect_rejection_signal, apply_rejection, apply_rejection_filter
@@ -498,3 +498,35 @@ def test_lookahead_falls_back_on_exception():
         assert result is None  # falls back to overgenerality's answer for this pool (no valid facets)
     finally:
         la.ENABLE_LOOKAHEAD_QUESTION_SELECTION = original
+
+
+def _tiny_shoe_catalog():
+    products = {
+        "leather_shoe": {"title": "Sturdy leather work boot", "categories": ["shoes"]},
+        "cotton_shoe": {"title": "Lightweight cotton canvas sneaker", "categories": ["shoes"]},
+    }
+    return CatalogIndex(products, GAZETTEER)
+
+
+def test_apply_hard_filters_extended_attrs_restricts_on_material():
+    import copilot.strategy_config as strategy_config
+    index = _tiny_shoe_catalog()
+    original = strategy_config.EXTENDED_HARD_FILTER_ATTRS
+    strategy_config.EXTENDED_HARD_FILTER_ATTRS = True
+    try:
+        ids = index.apply_hard_filters({"category": "shoes", "material": "leather"})
+        assert ids == {"leather_shoe"}
+    finally:
+        strategy_config.EXTENDED_HARD_FILTER_ATTRS = original
+
+
+def test_apply_hard_filters_extended_attrs_off_keeps_category_only_behavior():
+    import copilot.strategy_config as strategy_config
+    index = _tiny_shoe_catalog()
+    original = strategy_config.EXTENDED_HARD_FILTER_ATTRS
+    strategy_config.EXTENDED_HARD_FILTER_ATTRS = False
+    try:
+        ids = index.apply_hard_filters({"category": "shoes", "material": "leather"})
+        assert ids == {"leather_shoe", "cotton_shoe"}  # material is IGNORED when the flag is off
+    finally:
+        strategy_config.EXTENDED_HARD_FILTER_ATTRS = original

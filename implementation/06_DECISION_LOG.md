@@ -380,3 +380,58 @@ earlier accidental coincidence.
 
 **This does not change any of Phase 0's scored behavior** — it's a deployment/packaging decision
 about *when* a one-time, input-independent computation happens, not what the agent does per turn.
+
+---
+
+## D-HARD-FILTER-EXT — Extend `apply_hard_filters` to material/color/style (Phase 5.6, 2026-08-30)
+
+**Status: KEPT, enabled by default.**
+
+**What was decided**: `catalog.apply_hard_filters()` originally restricted the Buying-track's
+hard-filtered candidate pool only on `category`, `brand`, and `budget_max` slots — never on the
+disclosed hard-constraint attribute itself (material/color/style), despite `route_retrieval_breadth`'s
+own docstring claiming this restricts fusion "for Buying-track precision." A new
+`EXTENDED_HARD_FILTER_ATTRS` flag (`strategy_config.py`) also restricts on material/color/style when
+disclosed, using new `_by_material`/`_by_color`/`_by_style` catalog indices built with the same regex
+vocabulary `catalog._attributes_for()` already uses for candidate-side facet values.
+
+**How this was found**: not from another hypothesized fix, but from a new diagnostic
+(`tools/diagnose_buying_recall.py`) that directly measured — for the first time this session — *why*
+buying underperforms, rather than guessing. It found 37.5% of buying-scenario targets never reach
+the fused candidate pool at all (vs. 26.2% for browsing) and 23.8% reach the pool but never the final
+top-10 (vs. 8.8% for browsing). A follow-up isolation run (`--no-hard-filter`, forcing
+`route_retrieval_breadth` to always return `False`) produced byte-identical numbers to the baseline —
+proving the *existing* hard filter had zero effect on buying's recall gap, because it was already
+close to a no-op for most buying sessions (brand is structurally almost never disclosed per
+resolved-Q2; budget only sometimes; category alone barely narrows a 50k-item catalog).
+
+**Alternatives considered / why this wasn't tried earlier**: every prior buying-track attempt this
+session (query-vector nudge, weighted RRF fusion, rerank-depth widening, slate hedging, 1-step
+lookahead question selection) started from a plausible-sounding *fix* and ablated it — none first
+measured whether the gap was a retrieval-recall problem (unfixable by reranking) or a ranking
+problem. This is the first attempt grounded in a direct measurement of which one it actually is
+(both, roughly evenly split, with recall the larger single bucket).
+
+**Real risk going in, measured anyway**: material/color/style are single-regex-match, best-effort
+catalog attributes — a genuinely-matching product whose text happens to mention a *different*
+material/color first would be wrongly excluded once hard-filtered on it, the same kind of
+exact-string-match fragility resolved-Q7 already found in `details`. This is exactly the failure
+mode that sank the weighted-RRF and slate-hedging attempts on validation, so this was not assumed
+safe just because the mechanism looked well-motivated.
+
+**Ablation result (per `10_PRE_REGISTRATION.md`'s split discipline)**:
+- Training (n=160): TechnicalScore 0.476056 vs baseline 0.441967 (+7.7%), HitRate@10 +7.2%, MRR
+  +9.2%, MTTC also improved.
+- Validation (n=40, held out, single-candidate run per `tune_strategy.py`'s enforced rule):
+  TechnicalScore 0.445604 vs a fresh same-run baseline of 0.388292 (**+14.8%**), HitRate@10 +16.7%,
+  MRR +5.8%, MTTC improved.
+- **A clean win on BOTH splits** — unlike weighted RRF (reversed direction on validation) or slate
+  hedging (validation wash) — clearing the pre-registration's accept bar cleanly, not marginally.
+- Full 200-session guaranteed-path exit: **TechnicalScore 0.471193** (HitRate@10 0.55, MRR 0.347643,
+  MTTC 6.405) — up from 0.406428 (+15.9%), the single largest improvement of the project. Buying's
+  own hit rate rose to 0.475 from ~0.36-0.39 across every prior measurement this session.
+
+**Not yet done**: the optional LLM-booster ceiling has not been re-measured on top of this fix (the
+run was interrupted); treat the previously-reported +6.4pp ceiling delta as stale until re-measured,
+not as still additive on top of 0.471193. See `wiki/08_evaluation_log.md` for the full numbers and
+`wiki/03_design_log.md` for the diagnostic narrative.

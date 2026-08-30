@@ -4,12 +4,12 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-30 (recovered 6 "failed" codex reviews from session transcripts, found and
-fixed real bugs including a reversed Phase 3.5 decision; Phases 0-5.3 all closed out)
+Last updated: 2026-08-30 (Phase 5.6: diagnosed and fixed the buying-track retrieval-recall gap —
+new guaranteed-path headline score 0.471193, up from 0.406428)
 
 ## Current phase
 
-**Phases 0 through 5.3 are all DONE.** Full chronological detail lives in `wiki/03_design_log.md`
+**Phases 0 through 5.6 are all DONE.** Full chronological detail lives in `wiki/03_design_log.md`
 (one dated entry per phase/finding) and `wiki/08_evaluation_log.md` (every evaluator run). This
 section is the current-state summary only — don't duplicate narrative here, update it there.
 
@@ -23,14 +23,53 @@ section is the current-state summary only — don't duplicate narrative here, up
 | Phase 1 | 0.4087 | calibration + named adaptive orchestrator |
 | Phase 2 (corrected) | 0.4093 | reproducibility bug fix reversed one ablation's verdict |
 | Phase 3 | 0.4093 | unchanged (3.1/3.2 didn't touch scored code) |
-| **Phase 3.5, final, guaranteed path (no API key)** | **0.4064** | **realistic expected competition score** |
-| Phase 3.5, final, optional (`ANTHROPIC_API_KEY` present) | 0.4299 | bonus/demo ceiling, not the scored number |
+| Phase 3.5, guaranteed path (no API key) | 0.4064 | superseded below |
+| Phase 3.5, optional (`ANTHROPIC_API_KEY` present) | 0.4299 | superseded below |
+| **Phase 5.6, final, guaranteed path (no API key)** | **0.4712** | **realistic expected competition score** |
+| Phase 5.6, optional (`ANTHROPIC_API_KEY` present) | not yet re-measured | attempted, killed mid-run by an interrupt; the old +6.4pp ceiling delta is stale, don't assume it still applies on top of 0.4712 |
 
-**Report 0.406428 as the expected competition score in any writeup.** The 0.429943 ceiling requires
-`ANTHROPIC_API_KEY`, which the organizer does not provide for official grading — inert during real
-judging. **These are the corrected, final numbers** — earlier in this session, 0.415731/0.43531 were
-reported based on a shipped decision (slate hedging) that a recovered codex review found should not
-have shipped; see below.
+**Report 0.471193 as the expected competition score in any writeup** — up from 0.406428
+(+15.9%), the largest single improvement of the project, from diagnosing and fixing a real gap in
+the Buying-track hard filter (see "Phase 5.6" below). The organizer does not provide
+`ANTHROPIC_API_KEY` for official grading, so the optional LLM-booster ceiling remains inert during
+real judging regardless of its number — report the guaranteed figure as the expected score.
+
+**Phase 5.6 — buying-track retrieval-recall fix (2026-08-30)**: after Phase 5.4/5.5's packaging
+work, a new diagnostic (`tools/diagnose_buying_recall.py`, not scored-path code) directly measured
+*why* buying underperformed — something no prior fix attempt this session had actually checked
+first. It found 37.5% of buying-scenario targets never reached the fused candidate pool at all (vs.
+26.2% for browsing) and, via an isolation test forcing the existing hard filter off, proved that
+filter had ZERO effect on this — it only ever restricted on category/brand/budget, never on the
+disclosed material/color/style hard constraint itself (brand is structurally almost never disclosed
+per resolved-Q2, so the filter reduced to "category-only" for most buying sessions). A new
+`EXTENDED_HARD_FILTER_ATTRS` flag (`catalog.py`'s `apply_hard_filters`, new `_by_material`/
+`_by_color`/`_by_style` indices) also restricts on those attributes when disclosed. Ablated per this
+project's pre-registration discipline: training split (n=160) +7.7% TechnicalScore; **validation
+split (n=40, held out) +14.8% TechnicalScore, +16.7% HitRate@10** — a clean win on BOTH splits,
+unlike several earlier buying-track attempts (weighted RRF, slate hedging, query nudge) that looked
+good on training and failed or reversed on validation. **ENABLED by default.** Full 200-session
+guaranteed-path exit: TechnicalScore 0.471193 (HitRate@10 0.55, MRR 0.347643, MTTC 6.405) — buying's
+own hit rate rose to 0.475, from roughly 0.36-0.39 across every prior measurement this session. See
+`wiki/08_evaluation_log.md` and `implementation/06_DECISION_LOG.md` for the full account.
+
+**A major process failure and recovery happened earlier in Phase 3.5/4/5's work**: roughly a dozen
+`codex exec review` attempts across this session appeared to fail (short, incomplete-looking
+output), and were logged as an environment blocker. One review's actual verdict was eventually found
+sitting in its session transcript, never having reached the redirected output file at all —
+`codex exec review`'s final verdict can render through a channel plain file redirection doesn't
+reliably capture, even when the review fully completed. **6 of these "failed" reviews across this
+session had actually completed with real findings**, unread for hours. All 9 findings were recovered
+and triaged (fix or explicit decline, per protocol) — see `wiki/03_design_log.md`'s "recovered
+reviews" entry for the full account, and `CLAUDE.md` for the process fix so this can't recur silently.
+Two were genuine submission-breaking bugs (an embedding-cache path that resolved against the wrong
+working directory, defeating the whole point of bundling it; a build script that could silently ship
+an incomplete bundle) that would very likely have gone unnoticed until official scoring. One reversed
+a previously-reported "shipped win" (slate hedging) after the review correctly caught that its
+held-out validation result was a wash, not a confirmed improvement, and that the reasoning used to
+ship it anyway ("training split suggests it's real, validation just lacks power") was exactly the
+kind of post-hoc rationalization this project's own pre-registration rule exists to prevent.
+Separately, a distinct, genuinely-incomplete-review failure mode (not the redirect bug) was found and
+documented the same day — see `CLAUDE.md`'s protocol note.
 
 **A major process failure and recovery happened late in Phase 3.5/4/5's work**: roughly a dozen
 `codex exec review` attempts across this session appeared to fail (short, incomplete-looking
@@ -56,6 +95,8 @@ kind of post-hoc rationalization this project's own pre-registration rule exists
   **all three cut** after a reproducibility bug fix reversed VoI's original "kept" verdict (Phase 2).
 - Systematically-verified-robust clarification thresholds; comparative feedback confirmed
   structurally impossible against the actual simulator, correctly not built (Phase 3).
+- Extended hard-filter attributes (material/color/style, not just category/brand/budget) for
+  Buying-track retrieval — the single largest win of the project, +15.9% TechnicalScore (Phase 5.6).
 
 **What shipped (optional, requires a local API key, inert during official grading)**:
 - LLM listwise reranker (Claude Haiku 4.5) — genuine win when a key is present (Phase 3.5),
