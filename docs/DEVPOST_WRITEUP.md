@@ -51,10 +51,15 @@ local API key is present (never assumed for official grading, since the organize
 
 ## How we built it
 
-`[Python / libraries — cross-reference implementation/02_TECHNICAL_PRD.md's tooling list and fill
-in the exact final stack: sentence-transformers, numpy, hand-rolled BM25, the organizer's evaluator
-harness. Datasets: Amazon Reviews 2023, Clothing_Shoes_and_Jewelry category, organizer-frozen
-50,000-item catalog kit.]`
+Python 3.13, `sentence-transformers` for the two bundled open-weight models (`bge-small-en-v1.5`
+dense retrieval, `ms-marco-MiniLM-L-6-v2` cross-encoder reranking), `numpy` for vector math, and a
+hand-rolled, dependency-free BM25 inverted index (`src/copilot/catalog.py`) — kept out of an
+external BM25 library to minimize the offline/dependency footprint. Everything runs against the
+organizer's own local evaluator harness and the Amazon Reviews 2023 `Clothing_Shoes_and_Jewelry`
+category, using the organizer's frozen 50,000-item catalog kit and 200-session public dev set.
+An optional `anthropic` + `python-dotenv` path (Claude Haiku listwise reranker) activates only when
+a local API key is present — never a hard dependency, and excluded from the shipped submission's
+own `requirements.txt`.
 
 Development ran phase-by-phase against the organizer's own local evaluator (200 labeled public dev
 sessions), with every non-trivial change validated on a held-out split before being kept — see
@@ -62,9 +67,9 @@ sessions), with every non-trivial change validated on a held-out split before be
 
 ## Accomplishments we're proud of
 
-- **TechnicalScore 0.471** on the full 200-session public dev set (`Hit Rate@10 = 0.55`,
-  `MRR = 0.348`, `MTTC = 6.41`), against the organizer's unmodified baseline of **0.107** — roughly
-  a **4.4x** improvement, with zero required LLM calls in the scored path.
+- **TechnicalScore 0.441** on the full 200-session public dev set (`Hit Rate@10 = 0.53`,
+  `MRR = 0.295`, `MTTC = 6.63`), against the organizer's unmodified baseline of **0.107** — roughly
+  a **4.1x** improvement, with zero required LLM calls in the scored path.
 - A named, logged adaptive orchestrator (`orchestration_decisions` in the per-turn rationale log) —
   every retrieval-breadth, rerank-depth, and turn-policy decision is explainable after the fact, not
   a black box.
@@ -97,6 +102,16 @@ The honest accounting matters more here than a highlight reel:
   attributes, ablated with the same rigor as every failed attempt before it, raised the overall
   TechnicalScore by 15.9% — the largest single improvement of the project, and the one that finally
   closed most of the Buying gap.
+- **A measurement-contamination bug in our own evaluation tooling inflated the headline number
+  itself.** The evaluation scripts never explicitly cleared a leftover local `.env` credential
+  before launching the evaluator subprocess, so every "no API key" (guaranteed-path) measurement
+  was silently exercising the optional LLM-reranking booster anyway — the exact thing those runs
+  were supposed to measure the *absence* of. Caught only by noticing the reported score didn't
+  match the expected shape of a no-LLM run, not by any test. Fixed by explicitly clearing the
+  credential in the evaluation subprocess's environment (with an opt-in flag to deliberately
+  measure the optional ceiling instead), and every affected number in this writeup and the repo's
+  evaluation log was re-measured and corrected. A reminder that a measurement pipeline is part of
+  the system under test, and needs the same scrutiny as the code it's measuring.
 - **A code-review process gap of our own making.** A batch of automated code reviews appeared to
   fail outright (short, incomplete-looking output) and were logged as an environment limitation for
   several hours. It turned out several of them had actually completed successfully — the verdict
@@ -134,16 +149,20 @@ next fix.
   (didn't clear a higher bar than the existing entropy heuristic); a two-step extension was never
   attempted given that result, but remains a plausible next experiment if the underlying entropy
   signal itself improves.
+- Three more mechanisms are built and unit-tested but not yet ablated: seeding the multi-interest
+  state from the session's `user_profile` field (a free per-session signal ignored since Phase 0), a
+  Bayesian-shrinkage rating/review-count quality boost, and cross-encoder ensembling. Also pending:
+  RRF per-source weight tuning and offline doc2query-style document expansion.
 
 ## Built with
 
-`[final language/library/model list — pull directly from docs/SUBMISSION_README.md's "Models,
-cost, and offline behavior" table plus requirements.txt, so this list never drifts out of sync with
-what's actually shipped]`
+Python, NumPy, sentence-transformers, `BAAI/bge-small-en-v1.5` (dense retrieval), `cross-encoder/
+ms-marco-MiniLM-L-6-v2` (reranking), a hand-rolled BM25 inverted index, and — optional, not
+required — Anthropic's Claude Haiku via the `anthropic` SDK.
 
 ## Links
 
-- GitHub repo: `[repo URL]`
+- GitHub repo: [github.com/Dev-Sirbhaiya/TikTok-Techjam-Track-4](https://github.com/Dev-Sirbhaiya/TikTok-Techjam-Track-4)
 - Demo video (YouTube, public): `[video URL — see docs/DEMO_VIDEO_SCRIPT.md]`
 - Full development history (every ablation, decision, and why): linked from the repo's `wiki/` and
   `implementation/` directories, kept as a living record throughout rather than reconstructed after

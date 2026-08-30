@@ -70,9 +70,9 @@ Narrate over each turn as it prints (matches the actual `public_0005` trace):
 
 ## Section 4 — Honest results + what was tried and cut (60–90s)
 
-> "On the 200-session public dev set, this scores 0.471 TechnicalScore against the organizer's
-> unmodified baseline of 0.107 — about 4.4x. An optional LLM reranking pass adds a bit more when a
-> local Claude API key is present, but that's not the number we're reporting as the expected
+> "On the 200-session public dev set, this scores 0.441 TechnicalScore against the organizer's
+> unmodified baseline of 0.107 — about 4.1x. An optional LLM reranking pass can add a bit more when
+> a local Claude API key is present, but that's not the number we're reporting as the expected
 > competition score, since the organizer doesn't provide hosted credentials for official grading."
 
 Show the score progression table from `status.md` on screen for a few seconds.

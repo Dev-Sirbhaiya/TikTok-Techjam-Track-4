@@ -195,9 +195,22 @@ train/validation ablation before shipping, per this project's standing disciplin
   of SQ3 (team size, currently states "solo" per the existing README) and SQ5 (workshop notes this
   repo has no visibility into) — everything else is ready to paste into Devpost's form as-is.
 
-**Remaining before actual submission**: record the video per the script, fill in
-`docs/DEVPOST_WRITEUP.md`'s bracketed placeholders once the repo/video are public, and get the
-user's confirmation on SQ3/SQ5 (see `implementation/09_SUPERVISOR_QUESTIONS.md`).
+**2026-08-30 (later)**: `docs/DEMO_VIDEO_SCRIPT.md` and `docs/DEVPOST_WRITEUP.md` updated with the
+corrected 0.44082 headline number (was drafted against the since-retracted 0.471193), the writeup's
+"How we built it"/"Built with" placeholders filled in, the GitHub repo link
+(https://github.com/Dev-Sirbhaiya/TikTok-Techjam-Track-4) added, and an honest new Challenges bullet
+added about the LLM-key contamination bug itself. `submission/` was rebuilt from scratch
+(`tools/build_submission.py`) to pick up every source fix made today (BM25F laziness perf fix, the
+material-index/value-normalization fixes, etc.) — it was stale (last built 3:50pm, before those
+fixes). `tools/trace_session.py --sample-id public_0005` re-verified: still hits turn 3, rank 1 with
+current code, so the demo script's chosen session is still valid, no re-recording-script-changes
+needed.
+
+**Remaining before actual submission**: actually record the video per the script (this requires a
+human doing a real screen capture + voiceover — not something this session can produce), fill in
+`docs/DEVPOST_WRITEUP.md`'s remaining video-URL placeholder once it's uploaded, and get the user's
+confirmation on SQ3/SQ5 (see `implementation/09_SUPERVISOR_QUESTIONS.md`) — SQ3 currently defaults
+to "single contributor" per `docs/SUBMISSION_README.md`, unconfirmed by the user.
 
 **If picking up codex review again**: always pass `-c windows.sandbox="unelevated"` (fixes a hard
 crash vs. the default), but ALSO always check the session transcript directly if the `.raw.txt`
