@@ -65,6 +65,15 @@ def run_one(split: str, name: str, overrides: dict) -> dict:
         env.pop(env_var, None)
     for key, value in overrides.items():
         env[ENV_VAR_BY_KEY[key]] = str(value)
+    # CORRECTED (self-caught, 2026-08-30): agent.py's _build_llm_client() calls load_dotenv(),
+    # which reads .env from disk regardless of this subprocess's own environment -- every ablation
+    # here was silently exercising the optional LLM booster whenever a real ANTHROPIC_API_KEY
+    # happened to be present in .env (which it has been for most of this session). This tool's
+    # entire purpose is measuring the GUARANTEED path that ablation decisions get shipped on
+    # (D-LLM-TIER: the organizer provides no hosted credentials) -- an ablation contaminated by the
+    # optional booster is not measuring what it claims to. load_dotenv()'s default override=False
+    # means setting this to an empty string here is enough to block .env's value.
+    env["ANTHROPIC_API_KEY"] = ""
 
     subprocess.run([sys.executable, str(REPO_ROOT / "tools" / "install_shim.py")], check=True,
                     cwd=REPO_ROOT, env=env)

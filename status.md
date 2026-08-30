@@ -4,8 +4,34 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-30 (Phase 5.6: diagnosed and fixed the buying-track retrieval-recall gap —
-new guaranteed-path headline score 0.471193, up from 0.406428)
+Last updated: 2026-08-30 (LLM-key contamination + BM25F performance bug found and fixed — the
+guaranteed-path headline score is corrected to **0.44082**, down from the previously-reported
+0.471193, which was contaminated. See "Contamination correction" below before trusting any earlier
+number in this file.)
+
+## Contamination correction (2026-08-30, supersedes the Phase 5.6 numbers below)
+
+Two bugs were found in the tooling used to produce every "guaranteed path" number reported today:
+
+1. **LLM-key leak**: `agent.py`'s `_build_llm_client()` calls `load_dotenv()`, whose default
+   `override=False` reads the real `ANTHROPIC_API_KEY` from `.env` on disk regardless of what the
+   calling subprocess's own environment looked like. `tools/run_eval.py` and `tools/tune_strategy.py`
+   never explicitly cleared this, so every "guaranteed path" (no-API-key) measurement produced by
+   those two tools today was silently running the optional LLM booster instead. Fixed: both tools
+   now set `ANTHROPIC_API_KEY=""` in the subprocess environment by default (`run_eval.py` gained a
+   `--with-llm-booster` opt-out flag for deliberate optional-ceiling runs).
+2. **BM25F performance bug** (self-caught via `cProfile`, unrelated to scoring correctness but the
+   cause of today's pervasive slowness): `CatalogIndex` tokenized text for the BM25F high/low-field
+   indices unconditionally, even though `ENABLE_BM25F` defaults to `False` — tripling catalog
+   construction cost. Fixed by gating that work behind the flag.
+
+A fully-corrected re-verification (both fixes applied) gives **TechnicalScore 0.44082** (HitRate@10
+0.53, MRR 0.294732, MTTC 6.63, Efficiency 0.437) — see `wiki/08_evaluation_log.md`'s 2026-08-30
+rows for the full before/after account. **This is now the number to report, not 0.471193.**
+Whether the *original* 0.471193/0.406428 measurements (from earlier the same day, before either
+fix existed) were also contaminated by the same `.env` leak is an open, unverified question — their
+`.env` state at the time wasn't recorded. Treat every guaranteed-path number below dated before this
+correction as potentially optimistic until re-verified; only 0.44082 is confirmed clean.
 
 ## Current phase
 
@@ -25,14 +51,15 @@ section is the current-state summary only — don't duplicate narrative here, up
 | Phase 3 | 0.4093 | unchanged (3.1/3.2 didn't touch scored code) |
 | Phase 3.5, guaranteed path (no API key) | 0.4064 | superseded below |
 | Phase 3.5, optional (`ANTHROPIC_API_KEY` present) | 0.4299 | superseded below |
-| **Phase 5.6, final, guaranteed path (no API key)** | **0.4712** | **realistic expected competition score** |
-| Phase 5.6, optional (`ANTHROPIC_API_KEY` present) | not yet re-measured | attempted, killed mid-run by an interrupt; the old +6.4pp ceiling delta is stale, don't assume it still applies on top of 0.4712 |
+| Phase 5.6, final, guaranteed path (no API key) — reported figure at the time | 0.4712 | **later found contaminated by the LLM-key leak described above — see correction** |
+| Phase 5.6, optional (`ANTHROPIC_API_KEY` present) | not yet re-measured | attempted, killed mid-run by an interrupt; stale, not comparable to any number here |
+| **Post-correction, guaranteed path, both bugs fixed** | **0.4408** | **realistic expected competition score — report this one** |
 
-**Report 0.471193 as the expected competition score in any writeup** — up from 0.406428
-(+15.9%), the largest single improvement of the project, from diagnosing and fixing a real gap in
-the Buying-track hard filter (see "Phase 5.6" below). The organizer does not provide
-`ANTHROPIC_API_KEY` for official grading, so the optional LLM-booster ceiling remains inert during
-real judging regardless of its number — report the guaranteed figure as the expected score.
+**Report 0.44082 as the expected competition score in any writeup**, not 0.471193 — see the
+"Contamination correction" section above. The 0.471193 figure was produced before the LLM-key
+leak fix existed and is not trusted as a clean guaranteed-path number. The organizer does not
+provide `ANTHROPIC_API_KEY` for official grading, so the optional LLM-booster ceiling remains
+inert during real judging regardless of its number — report the guaranteed, key-excluded figure.
 
 **Phase 5.6 — buying-track retrieval-recall fix (2026-08-30)**: after Phase 5.4/5.5's packaging
 work, a new diagnostic (`tools/diagnose_buying_recall.py`, not scored-path code) directly measured
