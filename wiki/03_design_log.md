@@ -745,3 +745,44 @@ forward -- treated as the true value, not chased further given its small magnitu
 directly (see that file), so no future session repeats this mistake. `tools/extract_review.py` is
 a small, reusable utility for recovering a review's `review_output` from its session transcript
 whenever a `.raw.txt` looks incomplete -- check it before ever concluding a review "found nothing."
+
+## 2026-08-30 — Review of the recovery-fix commit (`2fe00dd`): genuinely incomplete this time, not another redirect artifact
+
+Ran `codex exec review --commit 2fe00dd` per protocol (review the commit that fixed all 9 recovered
+findings). The resulting `.raw.txt` was short again, so per the new protocol this was checked
+against the session transcript (`~/.codex/sessions/2026/08/30/rollout-...-01a05110-....jsonl`)
+before assuming anything — this time the distinction actually mattered in the other direction.
+
+Unlike the 6 prior cases, this transcript genuinely has **no** `ExitedReviewMode` event anywhere
+(confirmed by grepping the raw JSONL directly, not just running `extract_review.py` — the 4 hits
+`grep` found for the literal string were all inside displayed file contents of `CLAUDE.md` and
+`tools/extract_review.py` themselves, not an actual event). The transcript and the `.raw.txt`
+both end mid-flight, right after a `Get-FileHash` exec call comparing `src/copilot/` against
+`submission/src/copilot/`, followed by one more completed `Reasoning` item — then nothing. The
+codex process had already exited (confirmed via `ps`) by the time this was checked, so it isn't
+still running in the background; it stopped before reaching a verdict. This is a real, different
+failure mode from the redirect-capture bug: that bug hid a *completed* review; this one is an
+*actually incomplete* review.
+
+**Response**: retried once more in the background (`recovery-fix-retry-2026-08-30.raw.txt`),
+consistent with this session's established pattern of retrying rather than assuming permanent
+failure on the first miss. **The retry reproduced the same failure mode**: its transcript
+(`session id 01a05114-b030-...`) shows `EnteredReviewMode`, 36 completed `CommandExecution` items
+and 26 `Reasoning` items — a real, substantial review genuinely in progress, reading every changed
+file and diffing tests — then stops cold with no `ExitedReviewMode` and no final message, same as
+the first attempt. Two independent invocations of the same review, both doing real work and both
+dying before synthesizing a verdict, rules out "unlucky one-off" — this looks like `codex exec
+review` hitting some resource/context ceiling specifically on large, multi-file diffs in this
+environment (this commit touched 20 files), not the redirect-capture bug from earlier (that bug
+hid a *completed* review; this is a review that never completes at all on a diff this size).
+
+**Decision**: not retrying a third time — two identical failures on the same commit is enough
+signal that another attempt at the same scope won't land. `2fe00dd` is treated as
+manually-reviewed-only: every one of its 9 changes was already independently reasoned through,
+tested (re-ablated on both splits where relevant), and cross-checked against
+`10_PRE_REGISTRATION.md` and `06_DECISION_LOG.md` before being written — the same bar several
+earlier commits in this session shipped under when codex review was unavailable. **Process note for
+future large multi-file commits**: if a review needs to run against a wide diff again, split it
+per-file or per-concern rather than reviewing 20 changed files in one pass — cheap to do, and this
+session now has direct evidence a single big diff can cause the review to run out of steam before
+reaching a verdict.

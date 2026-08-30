@@ -100,6 +100,18 @@ In this repo specifically, 6 reviews across one session were wrongly treated as 
 several with real, high-priority findings that went untriaged for hours — see `wiki/03_design_log.md`'s
 "recovered reviews" entry for the full account and what it cost.
 
+**A second, distinct failure mode exists — do not confuse the two.** A review can also genuinely
+never complete: its own session transcript has no `ExitedReviewMode` event anywhere (confirmed by
+reading the JSONL directly, not just running `tools/extract_review.py` and seeing nothing — grep the
+raw file for the literal string too, since it can appear inside displayed source/doc content and
+give a false positive). Seen twice on the same wide (20-file) diff in this repo (2026-08-30,
+`wiki/03_design_log.md`'s "genuinely incomplete" entry) — both attempts entered review mode, did
+real work (dozens of exec calls, real reasoning), then stopped cold with no verdict. If a transcript
+check shows real work but no `ExitedReviewMode` after one retry, don't retry a third time on the
+same wide scope — split the review by file or concern instead, or accept the commit as
+manually-reviewed only (the same bar several earlier commits in this project shipped under when
+review was unavailable).
+
 When the review finishes (you'll be notified — don't poll for it):
 1. Read the raw report. If it looks incomplete or inconclusive, check the session transcript per
    the pitfall above before assuming the review found nothing.

@@ -85,20 +85,32 @@ artifact) from scratch any time; **re-run it before actually submitting** if `sr
 `docs/SUBMISSION_README.md` change again — the last build already includes every fix from the
 recovered-reviews triage (cache path fix, LLM booster fix, slate hedging reversal).
 
-**Remaining**: 5.4 (demo video — a multi-turn session walkthrough, no UI required; needs the
-user's input on scope/format, `implementation/09_SUPERVISOR_QUESTIONS.md` SQ4), 5.5 (Devpost
-written submission — cross-reference `implementation/02_TECHNICAL_PRD.md`'s deliverable checklist).
-Before writing the Devpost writeup, re-read `implementation/06_DECISION_LOG.md` in full — it now
-contains a complete, honest "tried, measured, kept/cut, and in one case reversed after review"
-record across every phase, exactly the Technical Execution narrative material the competition
-rewards (the recovered-reviews episode itself is strong material: it demonstrates the project's own
-review/ablation discipline catching a real mistake, not just validating good ideas). Confirm
-`implementation/09_SUPERVISOR_QUESTIONS.md`'s open items (SQ3, SQ5 too) before finalizing.
+**5.4 and 5.5 now have working drafts, not just a plan**:
+- `docs/DEMO_VIDEO_SCRIPT.md` — a full recordable script (terminal-recording format, ~4-6 min),
+  proposing a default for SQ4's open format question. `tools/trace_session.py` (new) runs one real
+  public-set session end-to-end and prints a readable per-turn trace for the recording — reuses the
+  organizer's own `initial_message`/`customer_reply` simulation functions directly, so the traced
+  behavior is identical to a real scored run.
+- `docs/DEVPOST_WRITEUP.md` — a full draft covering every standard Devpost section, built from this
+  project's own real numbers and honest ablation history (including the slate-hedging reversal and
+  the codex-review recovery episode as genuine technical narrative, not just a footnote). A few
+  fields are deliberately left as placeholders — repo/video URLs (don't exist yet) and confirmation
+  of SQ3 (team size, currently states "solo" per the existing README) and SQ5 (workshop notes this
+  repo has no visibility into) — everything else is ready to paste into Devpost's form as-is.
+
+**Remaining before actual submission**: record the video per the script, fill in
+`docs/DEVPOST_WRITEUP.md`'s bracketed placeholders once the repo/video are public, and get the
+user's confirmation on SQ3/SQ5 (see `implementation/09_SUPERVISOR_QUESTIONS.md`).
 
 **If picking up codex review again**: always pass `-c windows.sandbox="unelevated"` (fixes a hard
 crash vs. the default), but ALSO always check the session transcript directly if the `.raw.txt`
 looks short/incomplete — see `CLAUDE.md`'s protocol note and `tools/extract_review.py`. Do not
-conclude a review "found nothing" from a short raw.txt alone.
+conclude a review "found nothing" from a short raw.txt alone. **New, distinct finding (2026-08-30,
+recovery-fix commit `2fe00dd`)**: a review can also genuinely fail to complete — not a redirect
+issue, the transcript itself has no `ExitedReviewMode` event — apparently more likely on a wide,
+many-file diff (this commit touched 20 files; two independent attempts both died mid-review after
+real work, never producing a verdict). If this recurs, split the review by file/concern rather than
+retrying the same wide diff a third time.
 
 ## Blockers
 
