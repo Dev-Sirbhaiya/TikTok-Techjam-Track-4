@@ -27,17 +27,25 @@ def retriever_disagreement(bm25_ranked: list[str], dense_ranked: list[str], top_
 
 
 def reciprocal_rank_fusion(ranked_lists: list[list[str]], k: int = 60,
-                            restrict_to: set | None = None) -> dict[str, float]:
+                            restrict_to: set | None = None,
+                            weights: list[float] | None = None) -> dict[str, float]:
     """Returns {doc_id: fused_score}, NOT just an ordered id list -- callers need the actual score
     (for the entropy gate and preference-boost addition), not only the ranking. Self-caught before
     implementation: the original draft returned only `sorted(scores)` (ids), which would have
-    silently forced every downstream `_score` to a meaningless 0.0 placeholder."""
+    silently forced every downstream `_score` to a meaningless 0.0 placeholder.
+
+    `weights`, if given, must match `ranked_lists` 1:1 -- each leg's contribution is scaled by its
+    weight before summing (plain/unweighted RRF when omitted, i.e. every weight is 1.0). Phase 3.5
+    (strategy_config.METADATA_RRF_WEIGHT) uses this to test whether the metadata leg -- an exact-
+    match signal, unlike BM25/dense's fuzzy relevance -- deserves more trust in the fusion."""
+    if weights is None:
+        weights = [1.0] * len(ranked_lists)
     scores: dict[str, float] = {}
-    for ranked in ranked_lists:
+    for ranked, weight in zip(ranked_lists, weights):
         for rank, doc_id in enumerate(ranked):
             if restrict_to is not None and doc_id not in restrict_to:
                 continue
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank + 1)
+            scores[doc_id] = scores.get(doc_id, 0.0) + weight / (k + rank + 1)
     return scores
 
 
@@ -61,14 +69,19 @@ def retrieve_candidates(
     Returns (candidates, bm25_dense_disagreement) -- Phase 2.3/2.5 (phase2/voi.py) needs the
     disagreement signal, computed here (not recomputed by the caller) since the BM25/dense
     searches already happened -- recomputing them a second time would double retrieval cost."""
+    from .strategy_config import METADATA_RRF_WEIGHT
+
     bm25_ranked = catalog_index.bm25_search(query_text, top_n=150)
     dense_ranked = catalog_index.dense_search(query_text, top_n=150, query_embedding_hook=query_embedding_hook)
     metadata_ranked = catalog_index.metadata_rank(slots, top_n=150)
     disagreement = retriever_disagreement(bm25_ranked, dense_ranked)
 
-    lists = [r for r in (bm25_ranked, dense_ranked, metadata_ranked) if r]
-    if not lists:
+    legs = [(bm25_ranked, 1.0), (dense_ranked, 1.0), (metadata_ranked, METADATA_RRF_WEIGHT)]
+    legs = [(r, w) for r, w in legs if r]
+    if not legs:
         return [], disagreement
+    lists = [r for r, _ in legs]
+    weights = [w for _, w in legs]
 
     restrict_to = None
     if apply_hard_filter:
@@ -76,11 +89,11 @@ def retrieve_candidates(
         if hard:
             restrict_to = hard
 
-    fused = reciprocal_rank_fusion(lists, restrict_to=restrict_to)
+    fused = reciprocal_rank_fusion(lists, restrict_to=restrict_to, weights=weights)
     if not fused and restrict_to is not None:
         # Hard filter was too aggressive and emptied the pool -- fall back to unfiltered fusion
         # rather than returning nothing (never let a filter produce a total dead end).
-        fused = reciprocal_rank_fusion(lists)
+        fused = reciprocal_rank_fusion(lists, weights=weights)
 
     top_ids = sorted(fused, key=fused.get, reverse=True)[:k_pool]
     candidates = catalog_index.hydrate(top_ids)

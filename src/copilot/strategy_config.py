@@ -52,6 +52,19 @@ VOI_DISAGREEMENT_WEIGHT = _float("COPILOT_VOI_DISAGREEMENT_WEIGHT", 0.15)
 # agent.py's per-candidate negative-preference penalty: score -= NEG_BOOST_WEIGHT * cosine(emb, neg_vec).
 NEG_BOOST_WEIGHT = _float("COPILOT_NEG_BOOST_WEIGHT", 0.10)
 
+# retrieval.reciprocal_rank_fusion: the metadata leg's weight relative to BM25/dense (both fixed at
+# 1.0). Default 1.0 = plain, unweighted RRF (all three legs equal) -- the historical behavior.
+# TESTED 2026-08-30 (guaranteed path, both splits): training split showed a clean, monotonic trend
+# favoring LOWER weight (0.0 best: TechnicalScore 0.433666 vs baseline 0.425645; every tested value
+# above 1.0 regressed sharply, e.g. 3.0 -> 0.329179). But weight=0.0 did NOT replicate on the
+# held-out validation split (0.361333 vs baseline 0.376071 -- WORSE, the opposite direction). Per
+# 10_PRE_REGISTRATION.md/Ablation 3's explicit rule ("a win only on the training split is
+# meaningless by construction"), this is a decline, not a keep -- classic overfitting-to-training-
+# split trap. Left at the default 1.0; kept tunable here in case a future session wants to
+# investigate further (e.g. whether the effect is scenario-specific, buying vs. browsing) rather
+# than a single global weight.
+METADATA_RRF_WEIGHT = _float("COPILOT_METADATA_RRF_WEIGHT", 1.0)
+
 
 def as_dict() -> dict:
     """For logging a run's exact effective config next to its evaluator result."""
@@ -61,4 +74,5 @@ def as_dict() -> dict:
         "CLARIFY_NO_ASK_AFTER_TURN": CLARIFY_NO_ASK_AFTER_TURN,
         "VOI_DISAGREEMENT_WEIGHT": VOI_DISAGREEMENT_WEIGHT,
         "NEG_BOOST_WEIGHT": NEG_BOOST_WEIGHT,
+        "METADATA_RRF_WEIGHT": METADATA_RRF_WEIGHT,
     }

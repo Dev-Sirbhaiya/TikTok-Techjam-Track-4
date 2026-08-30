@@ -508,6 +508,32 @@ than recovering the "wasted" recall the reasoning predicted. **Reverted** — ca
 concrete, useful reminder (for this session and any future one) that even mechanical-looking fixes
 need empirical verification before shipping; "obviously correct" reasoning was wrong here.
 
+**Tried weighted RRF fusion next** — added a `weights` parameter to `reciprocal_rank_fusion()` and a
+new `METADATA_RRF_WEIGHT` knob (`strategy_config.py`), hypothesizing that the metadata leg (an
+exact-match signal on category/brand/budget) might deserve more trust in the fusion than BM25/dense's
+fuzzy relevance, especially for buying-track sessions. Swept 0.0/0.5/1.0/2.0/3.0 on the guaranteed-
+path training split: a clean, monotonic trend favoring LOWER weight, with weight=0.0 (dropping the
+leg entirely) BEST (TechnicalScore 0.433666 vs baseline 0.425645) and weights above 1.0 regressing
+sharply (3.0 → 0.329179) — plausibly because `metadata_rank()`'s coarse integer scoring (`+=2.0`/
+`+=1.0` per matching constraint) produces many exact ties, and up-weighting a low-resolution signal
+in RRF drowns out BM25/dense's more nuanced relevance ordering.
+
+This looked like a genuine, clean finding worth shipping — but per this project's own
+pre-registration discipline, ran the confirmatory check on the held-out validation split before
+committing to it, rather than trusting the training-split trend alone. **The validation split
+contradicted it**: weight=0.0 gave TechnicalScore 0.361333 vs baseline 0.376071 — worse, the
+opposite direction from training. Per Ablation 3's explicit decision rule ("a win only on the
+training split is meaningless by construction"), **declined** — exactly the overfitting-to-training-
+split trap the train/validation discipline exists to catch. `METADATA_RRF_WEIGHT` stays at its
+default 1.0 (no behavior change), kept as a tunable knob for a future session that wants to
+investigate a scenario-specific (rather than single global) weighting instead.
+
+Net effect of this investigation round: two "obviously reasonable" ideas (rerank_depth cap,
+metadata RRF weight) both tested and declined, on top of the two real, validated wins already
+shipped (slate hedging, LLM booster). All four outcomes are now honestly documented — a genuinely
+useful demonstration of the project's ablation discipline actually catching bad ideas before they
+ship, not just validating good ones.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside
