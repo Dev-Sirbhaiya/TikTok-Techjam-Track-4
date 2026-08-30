@@ -338,6 +338,26 @@ above.
 
 ## Phase 4 — World-model-lite cluster (highest risk; attempt only with substantial time left)
 
+**Attempted and declined (2026-08-30).** Built a 1-step lookahead question selector
+(`src/copilot/phase2/lookahead.py`) computing EXPECTED score-distribution entropy reduction per
+facet (conditioning on each observed value, weighted by its live-observed frequency in the pool --
+never ground truth, per D6/D7) as a more principled upgrade over `overgenerality.py`'s existing
+entropy-of-facet-values heuristic. Confirmed first (via direct source reading of
+`evaluator/local_evaluator.py`) that genuine counterfactual replay is feasible in principle
+(`customer_reply()` is a pure function of accessible state) but that simulating "what the simulator
+would actually say" is impossible by design, since the live Agent never receives the simulator's
+`intent_card`/hidden target -- so this reasons about the agent's own candidate-pool score
+distribution instead, the only information actually available.
+
+Ablated on the guaranteed path, both splits, per the mandatory higher-bar gate: validation (n=40)
+regressed (TechnicalScore 0.376071 → 0.367938, MTTC worse); training (n=160, confirmatory) was
+essentially flat (+0.1%, MTTC still slightly worse). **Declined** -- exactly the "diminishing
+returns... over an already-good 1-step heuristic" this section's own intro predicted. Full detail:
+`implementation/06_DECISION_LOG.md`, `wiki/08_evaluation_log.md`. The 2-step extension and full
+counterfactual/synthetic rollout augmentation (Phase 3.5's own deferred item) were not attempted
+given the 1-step result didn't clear the bar -- no reason to add depth to a mechanism that isn't
+earning its keep at depth 1.
+
 Explicit non-goals, carried forward: no trained neural world model, no heavy RL, no full MCTS, no
 retrained MIND/ComiRec, no LoRA/hypernetwork layer (independently cut — `06_DECISION_LOG.md` D8).
 Everything here stays inside a 1-2 step hand-built heuristic lookahead.

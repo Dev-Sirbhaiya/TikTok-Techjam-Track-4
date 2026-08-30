@@ -436,3 +436,51 @@ def test_query_nudge_noop_with_no_preference_vector_yet():
         assert np.array_equal(qn.nudge_query_embedding(q, None), q)
     finally:
         qn.ENABLE_QUERY_VECTOR_NUDGE = original
+
+
+def test_lookahead_disabled_matches_overgenerality_directly():
+    import copilot.phase2.lookahead as la
+    candidates = [{"attributes": {"color": "red"}, "_score": 0.1}] * 3 + \
+                 [{"attributes": {"color": "blue"}, "_score": 0.2}] * 3
+    expected = select_best_question(candidates, filled_slots=set(), attribute_enum=["color", "other", "brand"])
+    assert la.select_best_question(candidates, filled_slots=set(), attribute_enum=["color", "other", "brand"]) == expected
+
+
+def test_lookahead_prefers_facet_that_actually_splits_score_distribution():
+    import copilot.phase2.lookahead as la
+    original = la.ENABLE_LOOKAHEAD_QUESTION_SELECTION
+    la.ENABLE_LOOKAHEAD_QUESTION_SELECTION = True
+    try:
+        # score_entropy measures RANKING uncertainty, not raw value spread. "color" splits
+        # candidates into two groups, but every candidate within a color shares the identical
+        # score -- perfectly tied, i.e. MAXIMAL entropy within each resulting subset, so
+        # conditioning on color resolves nothing. "material" cuts across those score-tied groups,
+        # so each material subset contains a genuine high/low score split the peaked softmax can
+        # confidently rank -- conditioning on material actually reduces score entropy.
+        candidates = [
+            {"attributes": {"color": "red", "material": "cotton"}, "_score": 0.9},
+            {"attributes": {"color": "red", "material": "silk"}, "_score": 0.9},
+            {"attributes": {"color": "red", "material": "cotton"}, "_score": 0.9},
+            {"attributes": {"color": "blue", "material": "silk"}, "_score": 0.1},
+            {"attributes": {"color": "blue", "material": "cotton"}, "_score": 0.1},
+            {"attributes": {"color": "blue", "material": "silk"}, "_score": 0.1},
+        ]
+        attr = la.select_best_question(candidates, filled_slots=set(),
+                                        attribute_enum=["color", "material", "other", "brand"])
+        assert attr == "material"
+    finally:
+        la.ENABLE_LOOKAHEAD_QUESTION_SELECTION = original
+
+
+def test_lookahead_falls_back_on_exception():
+    import copilot.phase2.lookahead as la
+    original = la.ENABLE_LOOKAHEAD_QUESTION_SELECTION
+    la.ENABLE_LOOKAHEAD_QUESTION_SELECTION = True
+    try:
+        # A candidate missing "attributes" entirely would raise inside the lookahead path;
+        # the public entry point must catch it and fall back rather than propagate.
+        candidates = [{"parent_asin": "p1", "_score": 0.5}]
+        result = la.select_best_question(candidates, filled_slots=set(), attribute_enum=["color"])
+        assert result is None  # falls back to overgenerality's answer for this pool (no valid facets)
+    finally:
+        la.ENABLE_LOOKAHEAD_QUESTION_SELECTION = original

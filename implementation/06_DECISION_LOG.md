@@ -114,13 +114,24 @@ sources independently converging on it.
 "don't auto-infer a specific attribute from implicit signal" correction is preserved and is consistent
 with `research/04`'s DST literature on avoiding over-interpretation of weak signals.
 
-### D6 — Question/action selection: information gain (Phase 0) → value-of-information (Phase 2)
+### D6 — Question/action selection: information gain (Phase 0) → value-of-information (Phase 2) → lookahead (Phase 4, declined)
 **Status: Information gain KEPT (Phase 0), exact formula now specified (`04_SYSTEM_DESIGN.md`'s
 `score_entropy`/`_facet_value_entropy`, sourced from arXiv:2509.06185 and the CIKM'13 Probabilistic
 Entropy method — `research/05`). Value-of-information KEPT — GATED (Phase 2), correction preserved.**
 The critical correction from `/My Ideas/` (never compute against the live-unavailable ground-truth
 target rank) is independently reinforced by `research/05`'s entire "live-computable proxy" framing —
 this was not a hypothetical bug, it's the exact failure mode the literature also warns against.
+
+**Phase 4 extension, DECLINED (2026-08-30)**: built `phase2/lookahead.py`, a 1-step lookahead
+selector computing EXPECTED score-distribution entropy reduction per facet (conditioning on each
+observed value, weighted by its live-observed frequency — still never ground truth, D6/D7's rule
+extended cleanly rather than reopened) as a more principled upgrade over the Phase 0 heuristic
+(entropy of the facet's own value distribution, which only proxies ranking-uncertainty reduction).
+Ablated on both splits per Phase 4's mandatory higher-bar gate: validation regressed, training was
+essentially flat — declined, matching the build plan's own a priori prediction that a 1-step
+lookahead would show diminishing returns over an already-good heuristic. Module kept, disabled by
+default, for the "tried, measured, declined" record. Full detail:
+`implementation/05_BUILD_PLAN.md`'s Phase 4 section, `wiki/08_evaluation_log.md`.
 
 ### D7 — Two-phase reward: live-observable signal vs. offline target-aware tuning
 **Status: KEPT, unchanged.** The split (live = entropy/pool-size only; offline = target-aware terms,

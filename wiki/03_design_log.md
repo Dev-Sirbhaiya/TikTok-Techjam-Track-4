@@ -534,6 +534,49 @@ shipped (slate hedging, LLM booster). All four outcomes are now honestly documen
 useful demonstration of the project's ablation discipline actually catching bad ideas before they
 ship, not just validating good ones.
 
+**Phase 3.5's last item, resolved without duplicate work**: the build plan's "counterfactual/
+synthetic rollout augmentation" item required first confirming the evaluator is genuinely replayable
+with counterfactual actions. Direct source reading (already done for the Phase 3.2 investigation)
+confirms `customer_reply()` is a pure function of accessible state — so counterfactual replay is
+feasible in principle. But it also confirms the live Agent never receives the simulator's
+`intent_card`/hidden target, so genuinely simulating "what the simulator would say" is impossible by
+design — any counterfactual mechanism can only reason about the agent's own candidate pool, which is
+exactly Phase 4's "world-model-lite" scope. Rather than building a shallow version here and a
+"proper" one in Phase 4, folded this finding into Phase 4 directly instead of duplicating the work.
+
+## 2026-08-30 (cont.) — Phase 4 (world-model-lite): attempted, declined per its own predicted risk
+
+Built `phase2/lookahead.py`: a 1-step lookahead question selector computing EXPECTED
+score-distribution entropy reduction per facet — for each candidate facet, hypothetically condition
+on each of its observed values (weighted by live-observed frequency in the pool, never ground truth)
+and measure how much the resulting subsets' score entropy actually shrinks, versus the shipped
+heuristic's proxy (entropy of the facet's own value distribution, which doesn't necessarily
+correlate with ranking-uncertainty reduction — confirmed directly by a unit test where a facet with
+evenly-spread VALUES but tied scores within each group scores worse than a facet whose values
+happen to separate high/low scorers, exactly the distinction expected-entropy-reduction is meant to
+capture that raw value-entropy misses).
+
+Ablated per Phase 4's own mandatory gate ("bar set higher than earlier gates, diminishing returns
+are likely by construction over an already-good 1-step heuristic") on both splits: validation
+regressed (TechnicalScore 0.376071 → 0.367938, driven by MTTC going from 7.5 to 7.9 — the more
+theoretically-principled selector asks questions that take more turns to resolve in practice);
+training was essentially flat (+0.1%, MTTC still marginally worse). **Declined** — exactly the
+outcome the build plan's own intro predicted before any code was written. This is a clean example of
+the project's risk register doing its job: Phase 4 was explicitly flagged "highest risk, attempt
+only with substantial time left" and "diminishing returns... likely by construction," and the
+ablation confirmed that prediction rather than contradicting it. The 2-step lookahead extension and
+the broader counterfactual/synthetic rollout augmentation were not attempted, since there's no
+reason to add depth or scope to a mechanism that doesn't clear the bar at its simplest form.
+
+Module kept, disabled by default, for the writeup's "attempted the highest-risk phase, found
+diminishing returns exactly as predicted, declined" record — genuinely useful material precisely
+because it demonstrates the risk assessment was sound, not just that the team tried something.
+
+**No further scored-path work remains queued.** Full detail:
+`implementation/05_BUILD_PLAN.md`'s Phase 4 section, `implementation/06_DECISION_LOG.md` D6,
+`wiki/08_evaluation_log.md`. Proceeding to Phase 3.5 + Phase 4's combined closeout (both phases'
+substantive work concluded in the same investigation arc) and the standing goal's next step.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside

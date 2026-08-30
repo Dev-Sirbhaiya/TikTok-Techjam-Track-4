@@ -14,8 +14,9 @@ from .intent_router import route_intent
 from .logging_ import log_turn_rationale
 from .nlu import apply_extraction, extract_slot_updates
 from .orchestrator import OrchestrationTrace, decide_rerank_depth, record_action, route_retrieval_breadth
-from .overgenerality import score_entropy, select_best_question
+from .overgenerality import score_entropy
 from .phase2.action_policy import record_outcome, utility_multiplier
+from .phase2.lookahead import select_best_question
 from .phase2.query_nudge import nudge_query_embedding
 from .phase2.slate_hedging import hedge_slate
 from .phase2.voi import adjusted_clarify_threshold
