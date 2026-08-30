@@ -80,8 +80,10 @@ The honest accounting matters more here than a highlight reel:
   fixes failed before one actually worked, and the difference was measuring the problem first.**
   Early attempts — widening the reranked candidate pool, reweighting the metadata fusion signal, a
   query-embedding nudge toward accumulated preference, portfolio-style "slate hedging" for
-  high-uncertainty commits — were all honestly ablated on two independent data splits, and all
-  either regressed or failed to replicate on held-out data. One, slate hedging, initially looked
+  high-uncertainty commits — were all honestly ablated (one, the pool-widening attempt, regressed so
+  sharply on the training split alone that a validation-split check added no further information;
+  the rest were checked on two independent data splits), and all either regressed or failed to
+  replicate on held-out data. One, slate hedging, initially looked
   like a real win on the training split and shipped — then an adversarial code review caught that
   its held-out validation result was a genuine wash (identical Hit Rate@10 with or without it), and
   that the reasoning used to justify shipping anyway ("the validation sample is probably just

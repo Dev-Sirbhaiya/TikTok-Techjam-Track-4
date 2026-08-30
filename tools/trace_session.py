@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -45,6 +46,14 @@ def _pick_sample(samples: list[dict], sample_id: str | None, scenario: str | Non
     return samples[0]
 
 
+def _last_turn_rationale(turn_log_path: Path) -> dict | None:
+    if not turn_log_path.exists():
+        return None
+    with turn_log_path.open(encoding="utf-8") as fh:
+        lines = [line for line in fh if line.strip()]
+    return json.loads(lines[-1]) if lines else None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample-id", default=None)
@@ -52,6 +61,15 @@ def main() -> None:
     args = parser.parse_args()
 
     subprocess.run([sys.executable, str(REPO_ROOT / "tools" / "install_shim.py")], check=True, cwd=REPO_ROOT)
+
+    # CORRECTED per codex review (2026-08-30): the demo script's narration references the logged
+    # entropy value and orchestration decisions, but this tool only ever printed message/
+    # ask_attribute/recommendations -- those other fields exist only in agent.py's per-turn
+    # turn_log.jsonl, invisible to someone watching just this terminal output while recording. Point
+    # COPILOT_TURN_LOG at a private temp file (set before importing copilot.agent, which reads this
+    # env var at import time) and print each turn's entry inline instead.
+    turn_log_path = Path(tempfile.gettempdir()) / f"trace_turn_log_{uuid.uuid4().hex}.jsonl"
+    os.environ["COPILOT_TURN_LOG"] = str(turn_log_path)
 
     # tools/run_eval.py invokes the evaluator with cwd=PARTICIPANT_REPO, so that's where
     # CatalogIndex's embedding cache actually lives on disk (data/_catalog_embeddings.npz,
@@ -95,6 +113,12 @@ def main() -> None:
         if response.get("ask_attribute"):
             print(f"          [asking about: {response['ask_attribute']}]")
         print(f"          [top {min(3, len(ranked))} of {len(ranked)} recommendations: {ranked[:3]}]")
+        rationale = _last_turn_rationale(turn_log_path)
+        if rationale:
+            print(f"          [pool entropy: {rationale.get('pool_entropy')}, "
+                  f"buying_intent_score: {rationale.get('buying_intent_score')}]")
+            for d in rationale.get("orchestration_decisions", []):
+                print(f"          [orchestrator: {d.get('point')} -> {d.get('choice')} ({d.get('signal')})]")
 
         if override_applied and target in ranked:
             rank = ranked.index(target) + 1

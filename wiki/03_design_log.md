@@ -967,3 +967,24 @@ and a working review found genuine issues in it:
 
 All 3 findings fixed, no findings declined. `overall_correctness` was "patch is incorrect" (0.96
 confidence) before these fixes.
+
+**`77829e1` (Phase 5.4/5.5 packaging) triaged, 4 findings, 2 already fixed by a later commit**:
+1. **[P1, 0.99] Cache-path cwd bug** in `tools/trace_session.py` — already fixed by `d6ce4ac`
+   (`os.chdir(PARTICIPANT_REPO)`), reviewed at this earlier commit's snapshot before that fix
+   existed. No action needed.
+2. **[P2, 0.99] `DEMO_VIDEO_SCRIPT.md` referenced an unsupported `run_eval.py --session-id`
+   command** — already fixed in a later revision that points at `trace_session.py --sample-id`
+   instead. No action needed.
+3. **[P2, 0.96] `trace_session.py`'s printed output didn't expose pool entropy or orchestration
+   decisions**, which the demo narration references — genuinely still open. **Fixed**: the tool now
+   points `COPILOT_TURN_LOG` at a private temp file and prints each turn's logged entropy,
+   buying-intent score, and orchestration decisions inline, so a single terminal recording shows
+   everything the script's narration needs without cross-referencing a separate log file.
+4. **[P2, 0.97] `docs/DEVPOST_WRITEUP.md` claimed every declined buying-track attempt was "ablated
+   on two independent data splits"** — factually wrong for the rerank-pool-widening attempt, which
+   `wiki/08_evaluation_log.md` shows was only ever run on the training split (it regressed sharply
+   enough there that a validation check added no information). **Fixed**: reworded to accurately
+   distinguish that one item from the others.
+
+`d6ce4ac` (the cwd-bug fix itself) reviewed clean: "patch is correct," zero findings, 0.96
+confidence — a genuine, direct confirmation the earlier self-caught fix was solid.
