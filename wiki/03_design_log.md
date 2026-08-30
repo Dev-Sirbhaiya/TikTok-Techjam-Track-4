@@ -495,6 +495,19 @@ recall. **Cut** — a well-motivated idea, honestly tested, that didn't earn its
 over the LLM-booster-alone number. **0.415731 remains the number to report as the expected
 competition score**; 0.438299 is the optional ceiling with a key present.
 
+**Investigated `buying`/`intent_override`'s persistently lower hit rate next**: found a concrete
+mechanical gap in `orchestrator.decide_rerank_depth()` — `k_pool=60` fetches 60 candidates, but the
+rerank cap was hardcoded at 50, so candidates ranked 51-60 were fetched then silently dropped before
+ever reaching `rerank()`/`hedge_slate()`, never eligible for recommendation regardless of true
+relevance. This looked like a clear, low-risk bugfix (raising the cap to 60 costs nothing since
+latency isn't scored) — but measured it anyway rather than shipping on reasoning alone. **It
+regressed**: guaranteed-path training split, TechnicalScore 0.425645 → 0.391078, browsing hit rate
+0.634921 → 0.52381. Widening the reranked pool apparently dilutes signal for the cross-encoder,
+giving it more opportunities to misrank a genuinely weaker candidate above the true target, rather
+than recovering the "wasted" recall the reasoning predicted. **Reverted** — cap stays at 50. A
+concrete, useful reminder (for this session and any future one) that even mechanical-looking fixes
+need empirical verification before shipping; "obviously correct" reasoning was wrong here.
+
 ## 2026-08-29 (cont.) — Two-tier codex review + Embedding Explorer visualization
 
 - User asked for the codex-review loop to be explicit at the **phase** level (not just per-step) inside
