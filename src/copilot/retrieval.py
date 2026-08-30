@@ -42,6 +42,14 @@ def reciprocal_rank_fusion(ranked_lists: list[list[str]], k: int = 60,
         weights = [1.0] * len(ranked_lists)
     scores: dict[str, float] = {}
     for ranked, weight in zip(ranked_lists, weights):
+        # CORRECTED per codex review (2026-08-30): a weight of exactly 0.0 -- documented as
+        # "drop this leg entirely" -- used to still insert every one of that leg's ids into
+        # `scores` with a zero contribution. That made `fused` truthy purely from spurious
+        # zero-score entries even when no BM25/dense candidate survived a hard filter, silently
+        # suppressing the "hard filter emptied the pool" fallback and letting arbitrary
+        # zero-score candidates fill the final pool. A zero-weight leg must contribute nothing.
+        if weight == 0.0:
+            continue
         for rank, doc_id in enumerate(ranked):
             if restrict_to is not None and doc_id not in restrict_to:
                 continue

@@ -19,3 +19,23 @@ def resolve(bundled_dirname: str, hf_model_id: str) -> str:
     """Returns the bundled local path if it exists, else the bare HF model ID."""
     bundled = _BUNDLED_MODELS_DIR / bundled_dirname
     return str(bundled) if bundled.is_dir() else hf_model_id
+
+
+_PACKAGE_ROOT = Path(__file__).resolve().parents[2]  # .../submission (or repo root in dev)
+
+
+def resolve_data_asset(cwd_relative: Path) -> Path:
+    """Resolves a bundled data asset (e.g. the catalog embedding cache), checking the
+    process's cwd-relative path FIRST (dev convenience -- the evaluator's own cwd during local
+    iteration) and the package-relative path SECOND (the actual submission scenario, where the
+    official harness's cwd is unknown/uncontrolled -- self-caught via codex review, 2026-08-30:
+    a bare cwd-relative path silently missed the bundled cache whenever the importing process's
+    cwd wasn't the package root, defeating the entire point of bundling it). Returns the
+    cwd-relative path unchanged if NEITHER location has the file yet (first-ever compute, which
+    then saves to the cwd-relative path as before)."""
+    if cwd_relative.exists():
+        return cwd_relative
+    package_relative = _PACKAGE_ROOT / cwd_relative
+    if package_relative.exists():
+        return package_relative
+    return cwd_relative

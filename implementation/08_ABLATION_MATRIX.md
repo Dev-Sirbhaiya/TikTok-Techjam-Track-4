@@ -62,30 +62,38 @@ the shipped configuration if it shows a real MRR gain that justifies the added l
 risk (R2 in `07_RISK_REGISTER.md`) — the cross-encoder-only path must remain fully functional and be
 the documented default regardless of this ablation's outcome (NFR-2 is non-negotiable, not gated).
 
-**RESULT (2026-08-30, Phase 3.5, real Claude Haiku 4.5 listwise reranker, user-provided key)**:
-validation split (n=40) ON 0.475/0.306806/7.325/**0.403042** vs OFF 0.45/0.269792/7.5/**0.375938**;
-training split (n=160) ON 0.51875/0.320578/6.66875/**0.442173** vs OFF 0.5/0.280345/6.825/**0.417604**.
-Consistent win on every metric on both splits; MRR gained the most (+14.4% on training), exactly
-matching the "watch MRR primarily" expectation. **ENABLED by default** (`ranker.ENABLE_LLM_BOOSTER
-= True`). Per NFR-2, this never becomes a hard dependency — `agent.py` only constructs a client when
-`ANTHROPIC_API_KEY` is present, and any failure falls back to the guaranteed cross-encoder order.
-**The organizer's stated no-hosted-credentials policy means the official grading run will almost
-certainly have no such key, so this mechanism is expected to be inert during real judging** — the
-guaranteed cross-encoder-only number (full 200 sessions: TechnicalScore 0.40927) remains the
-realistic expected submission score. Full detail: `implementation/06_DECISION_LOG.md` D-LLM-TIER,
-`wiki/08_evaluation_log.md`.
+**RESULT, CORRECTED 2026-08-30 after a recovered codex review** (see
+`wiki/03_design_log.md`'s "recovered reviews" entry — the original ablation used a call with no
+explicit sampling control and no bounded timeout; a "determinism fix" attempt broke the booster
+entirely before being properly fixed): validation split (n=40) ON 0.45/0.303681/7.4/**0.388104**
+vs OFF 0.425/0.266667/7.6/**0.3605**; training split (n=160) ON
+0.51875/0.321029/6.6625/**0.442434** vs OFF 0.5/0.280952/6.81875/**0.417911**. Consistent win on
+every metric on both splits, confirming the original conclusion survives once the implementation
+actually works. **ENABLED by default** (`ranker.ENABLE_LLM_BOOSTER = True`). Per NFR-2, this never
+becomes a hard dependency — `agent.py` only constructs a client when `ANTHROPIC_API_KEY` is
+present, and any failure falls back to the guaranteed cross-encoder order. **The organizer's stated
+no-hosted-credentials policy means the official grading run will almost certainly have no such key,
+so this mechanism is expected to be inert during real judging** — the guaranteed cross-encoder-only
+number (full 200 sessions: TechnicalScore **0.406428**) remains the realistic expected submission
+score. Full detail: `implementation/06_DECISION_LOG.md` D-LLM-TIER, `wiki/08_evaluation_log.md`.
 
 ### Ablation 6 (new, Phase 3.5) — Portfolio/slate hedging on vs. off (gates the calibration-driven hedging item)
 **Motivation**: `tools/calibration_check.py` (2026-08-30) found sessions reaching a genuinely FORCED
 commit (out of turns, or nothing productive left to ask) are ~100% still at high entropy (0.7-1.0)
 and hit at a dismal 2.97% rate — pure top-K-by-score recommends near-duplicates of the single most-
 likely interpretation exactly when that interpretation is least likely to be right.
-**RESULT**: validation split (n=40, LLM booster off to isolate) ON 0.376071 vs OFF 0.375938 (flat —
-too few forced-commit sessions at this sample size); training split (n=160, confirmatory) ON
-**0.425645** vs OFF 0.417604 — a real, modest win (+1.9% TechnicalScore, +2.5% HitRate@10), gains
-concentrated in `buying` (+7.7% hit rate), zero regressions. **ENABLED by default**
-(`phase2/slate_hedging.py`, `ENABLE_SLATE_HEDGING = True`) — on the guaranteed path, so this
-directly raises the expected competition score to TechnicalScore 0.415731 (full 200 sessions).
+**RESULT**: validation split (n=40, LLM booster off to isolate) ON 0.376071 vs OFF 0.375938 —
+**a genuine wash, not a win** (HitRate@10 identical, 0.45 both; only a hairline MRR difference);
+training split (n=160, confirmatory) ON **0.425645** vs OFF 0.417604 (+1.9% TechnicalScore, gains
+concentrated in `buying`). **Originally shipped ENABLED, then REVERSED** (recovered codex review):
+per `10_PRE_REGISTRATION.md`'s own rule ("a win only on the training split is meaningless by
+construction"), a validation-split wash does not satisfy the acceptance bar, however plausible the
+training-split signal looks — "the validation sample is probably just too small to detect a real
+effect" is exactly the post-hoc reasoning the split discipline exists to rule out, not a legitimate
+way past a failed check. **DISABLED** (`phase2/slate_hedging.py`, `ENABLE_SLATE_HEDGING = False`).
+Module kept for the writeup's "tried, looked promising, held-out check didn't confirm it, correctly
+declined on review" record — itself a demonstration of the discipline catching a mistake, not just
+validating good ideas.
 
 ### Ablation 7 (new, Phase 3.5) — Query-vector nudge on vs. off (user-suggested)
 **Motivation**: nudge the dense retrieval QUERY EMBEDDING itself toward accumulated positive

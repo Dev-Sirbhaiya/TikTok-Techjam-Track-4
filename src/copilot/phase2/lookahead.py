@@ -52,16 +52,30 @@ def expected_entropy_reduction(candidates: list[dict], attribute: str) -> float:
     values = overgenerality._facet_values(candidates, attribute)
     if not values:
         return 0.0
+    # CORRECTED per codex review (2026-08-30): this used to normalize each value's probability
+    # over `len(values)` (the POPULATED subset only) while `base_entropy` covers the FULL pool --
+    # candidates missing this facet (which `_facet_values` silently drops) then contributed no
+    # posterior entropy at all, letting a sparsely-populated facet look artificially maximally
+    # informative. Now weights every branch (including a "missing" branch, if any candidates lack
+    # the facet) against the full pool size, so a sparse facet can no longer look better than it is.
+    total = len(candidates)
     counts = Counter(values)
-    total = len(values)
     base_entropy = overgenerality.score_entropy([c.get("_score", 0.0) for c in candidates])
     expected_conditional = 0.0
+    covered = 0
     for value, count in counts.items():
         p_value = count / total
+        covered += count
         subset_scores = [c.get("_score", 0.0) for c in candidates
                           if c.get("attributes", {}).get(attribute) == value]
         subset_entropy = overgenerality.score_entropy(subset_scores) if subset_scores else 0.0
         expected_conditional += p_value * subset_entropy
+    missing = total - covered
+    if missing > 0:
+        p_missing = missing / total
+        missing_scores = [c.get("_score", 0.0) for c in candidates
+                           if not c.get("attributes", {}).get(attribute)]
+        expected_conditional += p_missing * overgenerality.score_entropy(missing_scores)
     return max(0.0, base_entropy - expected_conditional)
 
 

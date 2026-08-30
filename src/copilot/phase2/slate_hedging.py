@@ -15,14 +15,23 @@ itself, not across multiple tracked interest vectors.
 """
 from __future__ import annotations
 
-ENABLE_SLATE_HEDGING = True  # Ablated 2026-08-30 (guaranteed path, LLM booster off to isolate the
+ENABLE_SLATE_HEDGING = False  # Ablated 2026-08-30 (guaranteed path, LLM booster off to isolate the
 # effect): validation split (n=40) ON 0.376071/0.45/0.270238/7.5 vs OFF 0.375938/0.45/0.269792/7.5
-# -- essentially flat (too few forced-commit sessions at this sample size to show an effect).
-# Training split (n=160, confirmatory): ON 0.425645/0.5125/0.281734/6.75625 vs OFF
-# 0.417604/0.5/0.280345/6.825 -- a real, modest win (+1.9% TechnicalScore, +2.5% HitRate@10), gains
-# concentrated in `buying` (+7.7% hit rate) exactly as the calibration finding predicted (buying's
-# hard-filtered pools are a common source of high-entropy forced commits), zero regression on any
-# scenario. KEPT ENABLED.
+# -- a genuine WASH, not a win (HitRate@10 identical; the only difference is a hairline MRR nudge
+# from re-hedging within already-hit sessions, not a single additional session rescued). Training
+# split (n=160) looked better: ON 0.425645/0.5125/0.281734/6.75625 vs OFF
+# 0.417604/0.5/0.280345/6.825 (+1.9% TechnicalScore, gains concentrated in `buying`).
+#
+# ORIGINALLY SHIPPED ENABLED, then REVERSED (codex review, recovered 2026-08-30 -- see
+# wiki/03_design_log.md's audit entry for the full story of how this review was initially missed):
+# 10_PRE_REGISTRATION.md's own rule is "a win only on the training split is meaningless by
+# construction" -- training split results exist to PROPOSE a change; only the untouched validation
+# split may ACCEPT it. The validation wash above does not satisfy that bar, however plausible the
+# training-split signal looked, and however tempting "the validation sample is probably just too
+# small to detect a real effect" is as a post-hoc justification -- that reasoning is exactly what
+# the split discipline exists to rule out, not a legitimate way around a failed validation check.
+# DISABLED. Module kept for the writeup's "tried, looked promising, held-out check didn't confirm
+# it, correctly declined" record -- itself a valid demonstration of the discipline working.
 
 HEDGE_ENTROPY_THRESHOLD = 0.7  # matches the calibration finding: forced-commit sessions cluster here
 _RESERVED_TOP = 0.6  # fraction of top_k slots kept as pure best-by-score; the rest hedge for diversity

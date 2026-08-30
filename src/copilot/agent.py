@@ -64,7 +64,13 @@ class Agent:
             if not api_key:
                 return None
             import anthropic
-            return anthropic.Anthropic(api_key=api_key)
+            # CORRECTED per codex review (2026-08-30): the SDK's default timeout/retry policy is
+            # long (minutes), so a slow/unreachable/rate-limited endpoint could block an ambiguous
+            # turn for minutes before ranker.py's except-and-fallback ever triggers -- defeating
+            # the promised "never a hard dependency, degrades gracefully" guarantee in practice,
+            # not just in principle. A short timeout and no retries mean a real failure surfaces
+            # (and falls back to the guaranteed cross-encoder path) in seconds, not minutes.
+            return anthropic.Anthropic(api_key=api_key, timeout=8.0, max_retries=0)
         except Exception:
             return None
 

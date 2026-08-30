@@ -385,8 +385,12 @@ class CatalogIndex:
             self._dense_failed = True
             return False
         try:
-            cache_path = Path("data/_catalog_embeddings.npz")  # .npz: bundles ids alongside embeddings
             from .model_paths import resolve as _resolve_model_path
+            from .model_paths import resolve_data_asset as _resolve_data_asset
+            # CORRECTED per codex review (2026-08-30): a bare cwd-relative path silently missed the
+            # bundled submission cache whenever the importing process's cwd wasn't the package root
+            # -- see model_paths.resolve_data_asset's docstring for the full reasoning.
+            cache_path = _resolve_data_asset(Path("data/_catalog_embeddings.npz"))  # .npz: bundles ids alongside embeddings
             self._embed_model = SentenceTransformer(_resolve_model_path("bge-small-en-v1.5", "BAAI/bge-small-en-v1.5"))
             # Self-caught performance bug before shipping this: the first version encoded up to
             # 1000 chars/item (title+features+description+categories+store+details) across all

@@ -220,24 +220,28 @@ the right default even if an API key *is* available. Any LLM usage (slot-extract
 rerank booster) must degrade gracefully to the non-LLM path on any failure (timeout, missing key,
 exception) — see `04_SYSTEM_DESIGN.md`'s `nlu.py`/`ranker.py` try/except patterns.
 
-**Ablation 4 result (2026-08-30)**: implemented `ranker._llm_listwise_rerank()` for real — Claude
-Haiku 4.5, single-pass listwise, only invoked when the cross-encoder's own margin-skip gate doesn't
-already fire (i.e., only on genuinely ambiguous shortlists, minimizing calls). Ablated on both
-splits: validation (n=40) ON 0.403042 vs OFF 0.375938; training (n=160) ON 0.442173 vs OFF 0.417604
-— a consistent win on every metric on both splits, MRR gaining the most (+14.4% on training) exactly
-as expected for a reranking mechanism, with zero regressions on any scenario at the larger sample
-size. **Enabled by default** (`ranker.ENABLE_LLM_BOOSTER = True`) per Ablation 4's own decision rule.
+**Ablation 4 result (2026-08-30), CORRECTED after a recovered codex review (see
+`wiki/03_design_log.md`'s "recovered reviews" entry)**: implemented `ranker._llm_listwise_rerank()`
+for real — Claude Haiku 4.5, single-pass listwise, only invoked when the cross-encoder's own
+margin-skip gate doesn't already fire. The first ablation (no explicit sampling control, no bounded
+timeout) reported a win, then a review-driven "determinism fix" (`temperature=0`) turned out to be
+itself broken — the installed SDK doesn't accept that parameter and the call crashed silently every
+time, completely disabling the booster — before being properly fixed (unsupported kwarg removed,
+`timeout=8.0, max_retries=0` kept). **Final, correctly-measured ablation**: validation (n=40) ON
+0.388104 vs OFF 0.3605; training (n=160) ON 0.442434 vs OFF 0.417911 — a consistent win on every
+metric on both splits, confirming the original conclusion survives once the implementation actually
+works. **Enabled by default** (`ranker.ENABLE_LLM_BOOSTER = True`) per Ablation 4's own decision rule.
 
 **Critical caveat, not a formality**: the organizer provides no hosted model credentials for the
 official grading run, and `agent.py` only constructs an `llm_client` when `ANTHROPIC_API_KEY` is
 present in the environment (this session's own local `.env`, gitignored, never shipped in the
 submission). **The official private-set score will almost certainly be measured WITHOUT this key
 present**, meaning this entire mechanism is inert during real judging and the guaranteed
-cross-encoder-only number (Phase 2 corrected exit, full 200 sessions: TechnicalScore 0.40927) is the
-realistic expected submission score, not the boosted number. The boosted result is genuine,
-validated, and worth reporting as bonus/stretch capability in the writeup and demo — but must never
-be presented as "the" score. See `wiki/08_evaluation_log.md`'s Ablation 4 rows for the full numbers
-including a same-configuration full-200-session confirmatory run.
+cross-encoder-only number (full 200 sessions: TechnicalScore **0.406428** — see
+`wiki/08_evaluation_log.md`'s corrected rows for why this differs slightly from the earlier
+0.40927) is the realistic expected submission score, not the boosted number (0.429943 with the key
+present). The boosted result is genuine, validated, and worth reporting as bonus/stretch capability
+in the writeup and demo — but must never be presented as "the" score.
 
 ### D-PACKAGING (new) — One implementation, two thin re-export shims
 **Status: KEPT (Phase 0).** Resolves a real gotcha neither idea source addressed: local dev evaluation
@@ -357,11 +361,22 @@ embeddings and validating an exact list match before trusting the cache; any mis
 to a full recompute (the existing, already-tested graceful-degradation path). Regenerated the cache
 in the new format and verified: (1) a fresh compute-and-save run produces `(50000, 384)` embeddings
 and a valid cache file; (2) a second run against the same catalog hits the fast cache-load path in
-~17s (vs. ~14.5 min to recompute) with ids validated. **Also verified the actual submission bundle
-end-to-end**: copied `submission/` to an isolated temp directory with `HF_HUB_OFFLINE=1` and an
-empty `HF_HOME` (no access to this machine's real HF cache), and confirmed `Agent` constructs and
-responds correctly using only the bundled models and cache — the genuine offline reproducibility
-check `05_BUILD_PLAN.md`'s Phase 5.3 requires, not a check against the dev machine's own cache.
+~17s (vs. ~14.5 min to recompute) with ids validated.
+
+**Second bug found by a recovered codex review (see `wiki/03_design_log.md`'s "recovered reviews"
+entry), on top of the first**: the cache path itself (`Path("data/_catalog_embeddings.npz")`) was
+resolved relative to the process's current working directory, not the package. The FIRST "verified
+end-to-end" offline test (copied `submission/` to an isolated temp dir, `cd`-ed into it, ran with
+`HF_HUB_OFFLINE=1`) accidentally masked this: `cd`-ing into `submission/` before running happened to
+make the cwd-relative path resolve correctly by coincidence, not because the fix worked — if the
+official harness imports `submission/agent.py` without first `cd`-ing there (the far more likely
+scenario), the bundled cache would be silently missed and the ~14.5-minute recompute would trigger
+anyway, defeating this entire decision's purpose. **Actually fixed**: added
+`model_paths.resolve_data_asset()` (cwd-relative first for dev convenience, package-relative second
+for the real submission scenario) and **re-verified properly** — ran the isolated offline test again,
+deliberately staying at the temp directory's root (not `cd`-ed into `submission/`) and importing via
+`sys.path.insert(0, "submission")`: `Agent` constructed in 13s, a genuine cache hit without the
+earlier accidental coincidence.
 
 **This does not change any of Phase 0's scored behavior** — it's a deployment/packaging decision
 about *when* a one-time, input-independent computation happens, not what the agent does per turn.

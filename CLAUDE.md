@@ -86,8 +86,23 @@ codex exec review --base <SHA before this phase's first commit> --title "<phase 
 unavailable in the environment, log that fact in `status.md` under Blockers and continue; do not
 silently skip this step without noting why.)
 
+**Critical pitfall, confirmed the hard way (2026-08-30, this exact repo/environment on Windows)**:
+`codex exec review`'s redirected stdout (`> file.raw.txt`) can capture only the tool-call/exec
+output and cut off BEFORE the actual review verdict — the raw.txt then looks like an incomplete
+failure (just a banner + one command's output, nothing else) even though the review fully
+completed with real findings. **Before concluding a review "failed" or "produced no findings"**,
+check the actual session transcript: find the session id in the raw.txt's banner, then look for
+`~/.codex/sessions/**/*<session-id>*.jsonl` and search it for `"type":"ExitedReviewMode"` — the
+`review_output` field there (findings, overall_correctness, overall_explanation) is the real,
+authoritative verdict regardless of what the redirected file shows. A short raw.txt is NOT
+sufficient evidence that a review failed to produce findings — always check the transcript first.
+In this repo specifically, 6 reviews across one session were wrongly treated as failed this way,
+several with real, high-priority findings that went untriaged for hours — see `wiki/03_design_log.md`'s
+"recovered reviews" entry for the full account and what it cost.
+
 When the review finishes (you'll be notified — don't poll for it):
-1. Read the raw report.
+1. Read the raw report. If it looks incomplete or inconclusive, check the session transcript per
+   the pitfall above before assuming the review found nothing.
 2. Triage every finding: for each, either fix it (new small commit referencing the review) or
    explicitly decline it with a one-line reason. No finding is silently dropped.
 3. Write a curated summary into `wiki/reviews/<phase-slug>-<date>.md` (the human-readable log —

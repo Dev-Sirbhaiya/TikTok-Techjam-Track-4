@@ -4,11 +4,12 @@
 > rules that keep this file honest — it must always name a concrete next workstream, and every
 > work-phase completion must update it.
 
-Last updated: 2026-08-30 (Phases 0-4 all closed out; proceeding to Phase 5, submission packaging)
+Last updated: 2026-08-30 (recovered 6 "failed" codex reviews from session transcripts, found and
+fixed real bugs including a reversed Phase 3.5 decision; Phases 0-5.3 all closed out)
 
 ## Current phase
 
-**Phases 0 through 4 are all DONE.** Full chronological detail lives in `wiki/03_design_log.md`
+**Phases 0 through 5.3 are all DONE.** Full chronological detail lives in `wiki/03_design_log.md`
 (one dated entry per phase/finding) and `wiki/08_evaluation_log.md` (every evaluator run). This
 section is the current-state summary only — don't duplicate narrative here, update it there.
 
@@ -20,14 +21,33 @@ section is the current-state summary only — don't duplicate narrative here, up
 | Organizer's baseline | 0.1067 | unmodified weak BM25 starter |
 | Phase 0 | 0.3284 | first working hybrid agent |
 | Phase 1 | 0.4087 | calibration + named adaptive orchestrator |
-| Phase 2 (corrected) | 0.4093 | see reproducibility-bug note below |
+| Phase 2 (corrected) | 0.4093 | reproducibility bug fix reversed one ablation's verdict |
 | Phase 3 | 0.4093 | unchanged (3.1/3.2 didn't touch scored code) |
-| **Phase 3.5 (guaranteed path — no API key)** | **0.4157** | **realistic expected competition score** |
-| Phase 3.5 (optional, `ANTHROPIC_API_KEY` present) | 0.4383 | bonus/demo ceiling, not the scored number |
+| **Phase 3.5, final, guaranteed path (no API key)** | **0.4064** | **realistic expected competition score** |
+| Phase 3.5, final, optional (`ANTHROPIC_API_KEY` present) | 0.4299 | bonus/demo ceiling, not the scored number |
 
-**Report 0.415731 as the expected competition score in any writeup.** The 0.4383 ceiling requires
-`ANTHROPIC_API_KEY`, which the organizer does not provide for official grading — that mechanism is
-almost certainly inert during real judging.
+**Report 0.406428 as the expected competition score in any writeup.** The 0.429943 ceiling requires
+`ANTHROPIC_API_KEY`, which the organizer does not provide for official grading — inert during real
+judging. **These are the corrected, final numbers** — earlier in this session, 0.415731/0.43531 were
+reported based on a shipped decision (slate hedging) that a recovered codex review found should not
+have shipped; see below.
+
+**A major process failure and recovery happened late in Phase 3.5/4/5's work**: roughly a dozen
+`codex exec review` attempts across this session appeared to fail (short, incomplete-looking
+output), and were logged as an environment blocker. One review's actual verdict was eventually found
+sitting in its session transcript, never having reached the redirected output file at all —
+`codex exec review`'s final verdict can render through a channel plain file redirection doesn't
+reliably capture, even when the review fully completed. **6 of these "failed" reviews across this
+session had actually completed with real findings**, unread for hours. All 9 findings were recovered
+and triaged (fix or explicit decline, per protocol) — see `wiki/03_design_log.md`'s "recovered
+reviews" entry for the full account, and `CLAUDE.md` for the process fix so this can't recur silently.
+Two were genuine submission-breaking bugs (an embedding-cache path that resolved against the wrong
+working directory, defeating the whole point of bundling it; a build script that could silently ship
+an incomplete bundle) that would very likely have gone unnoticed until official scoring. One reversed
+a previously-reported "shipped win" (slate hedging) after the review correctly caught that its
+held-out validation result was a wash, not a confirmed improvement, and that the reasoning used to
+ship it anyway ("training split suggests it's real, validation just lacks power") was exactly the
+kind of post-hoc rationalization this project's own pre-registration rule exists to prevent.
 
 **What shipped (guaranteed path, always active)**:
 - Hybrid BM25 + dense + metadata retrieval, RRF fusion, cross-encoder reranking (Phase 0).
@@ -36,55 +56,63 @@ almost certainly inert during real judging.
   **all three cut** after a reproducibility bug fix reversed VoI's original "kept" verdict (Phase 2).
 - Systematically-verified-robust clarification thresholds; comparative feedback confirmed
   structurally impossible against the actual simulator, correctly not built (Phase 3).
-- **Portfolio/slate hedging** — real, validated win, enabled by default (Phase 3.5).
 
 **What shipped (optional, requires a local API key, inert during official grading)**:
-- LLM listwise reranker (Claude Haiku 4.5) — genuine +6.4% win when a key is present (Phase 3.5).
+- LLM listwise reranker (Claude Haiku 4.5) — genuine win when a key is present (Phase 3.5),
+  re-verified after a recovered review found the original "determinism fix" attempt was itself
+  broken (unsupported SDK parameter silently crashed and disabled the whole mechanism).
 
 **What was tried and honestly declined** (all documented with real ablation numbers, not hidden):
-query-vector nudging, rerank-pool-depth widening, weighted RRF fusion (metadata leg), and Phase 4's
-1-step lookahead question selector — each looked reasonable on paper or even won on the training
-split, but didn't survive validation-split confirmation or a mandatory higher-bar gate. Full
-reasoning for each is in `wiki/03_design_log.md`'s 2026-08-30 entries.
+query-vector nudging, rerank-pool-depth widening, weighted RRF fusion (metadata leg), portfolio/
+slate hedging (reversed after shipping — see above), and Phase 4's 1-step lookahead question
+selector — each looked reasonable on paper or even won on the training split, but didn't survive
+validation-split confirmation or a mandatory higher-bar gate. Full reasoning for each is in
+`wiki/03_design_log.md`'s 2026-08-30 entries.
 
 **Reproducibility**: a real hash-seed nondeterminism bug (`catalog.py`'s `set` iteration order) was
-found and fixed — the agent's behavior on the deterministic simulator is now verified byte-identical
-across repeated runs of the same config.
+found and fixed — the agent's behavior on the deterministic simulator is verified byte-identical
+across repeated runs of the same config. A separate, much smaller (~0.6pp) source of numeric drift
+was identified and accepted: regenerating the catalog embedding cache from scratch produces tiny
+floating-point differences from a prior cache due to ordinary multi-threaded BLAS non-associativity —
+stable once a given cache file is fixed, not a control-flow bug.
 
 ## Next workstream
 
-**Phase 5 — submission packaging, in progress.** 5.1 (final numbers) and 5.2 (package
-`submission/`, bundle offline model + embedding-cache artifacts, verify genuine offline
-reproducibility) are **done** — see `implementation/05_BUILD_PLAN.md`'s Phase 5 section for full
-detail. `tools/build_submission.py` regenerates `submission/` (gitignored, a build artifact) from
-scratch any time; re-run it if `src/copilot/` changes before the actual submission.
-
-5.3 is also **done**: `docs/SUBMISSION_README.md` (tracked source, copied into `submission/
-README.md` by the build script) covers approach, setup, run command, model/cost/latency/offline
-disclosure, limitations, and contribution breakdown.
+**Phase 5 — submission packaging. 5.1, 5.2, and 5.3 are done** (final numbers, `submission/`
+packaging with bundled offline model/cache artifacts, README) — see `implementation/05_BUILD_PLAN.md`'s
+Phase 5 section. `tools/build_submission.py` regenerates `submission/` (gitignored, a build
+artifact) from scratch any time; **re-run it before actually submitting** if `src/copilot/` or
+`docs/SUBMISSION_README.md` change again — the last build already includes every fix from the
+recovered-reviews triage (cache path fix, LLM booster fix, slate hedging reversal).
 
 **Remaining**: 5.4 (demo video — a multi-turn session walkthrough, no UI required; needs the
 user's input on scope/format, `implementation/09_SUPERVISOR_QUESTIONS.md` SQ4), 5.5 (Devpost
 written submission — cross-reference `implementation/02_TECHNICAL_PRD.md`'s deliverable checklist).
 Before writing the Devpost writeup, re-read `implementation/06_DECISION_LOG.md` in full — it now
-contains a complete, honest "tried, measured, kept/cut" record across every phase, exactly the
-Technical Execution narrative material the competition rewards. Confirm
+contains a complete, honest "tried, measured, kept/cut, and in one case reversed after review"
+record across every phase, exactly the Technical Execution narrative material the competition
+rewards (the recovered-reviews episode itself is strong material: it demonstrates the project's own
+review/ablation discipline catching a real mistake, not just validating good ideas). Confirm
 `implementation/09_SUPERVISOR_QUESTIONS.md`'s open items (SQ3, SQ5 too) before finalizing.
+
+**If picking up codex review again**: always pass `-c windows.sandbox="unelevated"` (fixes a hard
+crash vs. the default), but ALSO always check the session transcript directly if the `.raw.txt`
+looks short/incomplete — see `CLAUDE.md`'s protocol note and `tools/extract_review.py`. Do not
+conclude a review "found nothing" from a short raw.txt alone.
 
 ## Blockers
 
-- **Codex automated review is unreliable in this environment.** Root cause identified: `codex
-  doctor` showed Windows `sandbox backend: elevated`, which needs `CreateProcessAsUserW` to spawn
-  subprocesses — that's what was failing with "Access is denied." A `Bash(codex exec review:*)`
-  permission rule plus `-c windows.sandbox="unelevated"` fixes the hard crash (valid values are
-  `elevated`/`unelevated`, not `none`), but most attempts still exit cleanly without producing a
-  review verdict — a separate, undiagnosed issue in codex's own review loop. Across this session,
-  roughly 2 of 10+ attempts produced a real, complete review (one found and fixed a genuine bug in
-  `tools/tune_strategy.py`); the rest did not reach a verdict. **Not treated as unreviewed work**:
-  every shipped change was verified via careful manual code review plus rigorous empirical
-  ablation (typically 2 independent splits, checked for regressions on every scenario) before
-  shipping — the same standard this project has applied throughout. If picking this up again,
-  always pass `-c windows.sandbox="unelevated"`, but don't expect it to reliably complete.
+- **Codex automated review's redirected-output capture is unreliable, but this is now a documented,
+  worked-around process issue, not a coverage gap.** Root cause of the original hard crashes:
+  `codex doctor` showed Windows `sandbox backend: elevated`, needing `CreateProcessAsUserW`, which
+  failed with "Access is denied" — fixed via a `Bash(codex exec review:*)` permission rule plus
+  `-c windows.sandbox="unelevated"`. Separately, and more importantly: a review's final verdict can
+  render through a channel that plain file redirection doesn't reliably capture, making a fully
+  *completed* review look like a failure in the saved `.raw.txt`. **This was not caught until several
+  hours after the fact** — 6 reviews across this session were wrongly logged as failed and their
+  findings sat unread. All were recovered from `~/.codex/sessions/**/*<session-id>*.jsonl` (search
+  for `"type":"ExitedReviewMode"`) and fully triaged. Going forward: never conclude a review "found
+  nothing" from a short raw.txt — always check the transcript first.
 
 ## Recent activity
 
@@ -93,10 +121,12 @@ Technical Execution narrative material the competition rewards. Confirm
 - 2026-08-29 — Phase 1 shipped (0.4087, +24.5%).
 - 2026-08-30 — Phase 2 shipped (0.4111), then corrected to 0.4093 after a reproducibility bug fix
   reversed one ablation's verdict. Phase 3 closed out (3.1 robust, 3.2 confirmed impossible).
-  Phase 3.5: LLM booster (+6.4%, optional) and slate hedging (+1.9%, guaranteed) both shipped;
-  query-vector nudge, rerank-depth widening, and weighted RRF all tried and declined. Phase 4's
-  1-step lookahead tried and declined, matching its own predicted risk. **Guaranteed-path exit:
-  TechnicalScore 0.415731.**
+  Phase 3.5/4 built and ablated 5 new mechanisms (LLM booster, slate hedging, query nudge,
+  rerank-depth widening, weighted RRF, Phase 4 lookahead). Phase 5.1-5.3 packaged the submission.
+  **Then**: discovered codex reviews were silently succeeding without reaching redirected output;
+  recovered and triaged 6 reviews / 9 findings, including 2 submission-breaking P1 bugs and a
+  reversal of the slate hedging decision. **Final corrected guaranteed-path exit: TechnicalScore
+  0.406428** (optional ceiling with a key: 0.429943).
 
 ## Open questions / decisions needed from the user
 

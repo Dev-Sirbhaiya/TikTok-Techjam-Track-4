@@ -70,20 +70,24 @@ expected for official evaluation.
 
 - **`buying` and `intent_override` scenarios lag `browsing`/`boundary` in hit rate.** Several
   targeted fixes were tried (widening the reranked candidate pool, reweighting the metadata fusion
-  leg, a query-embedding nudge toward accumulated preference) — all were honestly ablated on two
-  independent data splits, and all either regressed or failed to replicate on held-out data. The
-  gap is real and unresolved; the design log documents exactly what was tried and why each attempt
-  didn't hold up, which is itself useful signal for where the actual bottleneck likely lives
-  (retrieval precision under hard filtering, not just clarification-turn policy).
+  leg, a query-embedding nudge toward accumulated preference, portfolio/slate hedging for
+  high-uncertainty commits) — all were honestly ablated on two independent data splits, and all
+  either regressed or failed to replicate on held-out data (one, slate hedging, initially looked
+  like a win on the training split but was correctly reversed after an adversarial review caught
+  that its held-out validation result was a genuine wash, not a confirmed improvement). The gap is
+  real and unresolved; the design log documents exactly what was tried and why each attempt didn't
+  hold up, which is itself useful signal for where the actual bottleneck likely lives (retrieval
+  precision under hard filtering, not just clarification-turn policy).
 - **A 1-step "world-model-lite" lookahead for question selection was built and ablated but declined**
   — it didn't clear a higher bar than the existing entropy heuristic, exactly as predicted before
   building it. A 2-step extension was not attempted given the 1-step result.
-- **Portfolio/slate hedging for high-uncertainty commits** was the one clearly validated accuracy
-  improvement found late in development — there may be more headroom in this direction (e.g.
-  hedging strategies tuned per scenario type) that time didn't allow exploring further.
 - With more time: a genuine offline SkillOpt-style optimization loop over a wider hyperparameter
   space (only a targeted sweep was run here), and a deeper investigation into why the retrieval
   pipeline specifically underperforms on hard-filtered (Buying-track) pools.
+- An adversarial code review late in development caught two submission-breaking bugs before they
+  shipped (a model/cache path that resolved against the wrong working directory, and a build script
+  that could silently produce an incomplete bundle) — a reminder that offline/reproducibility
+  claims need to be verified against the actual failure mode, not just a convenient test setup.
 
 ## Contribution breakdown
 

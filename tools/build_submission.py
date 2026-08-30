@@ -78,11 +78,17 @@ def _bundle_models() -> None:
 
 
 def _bundle_embedding_cache() -> None:
+    # CORRECTED per codex review (2026-08-30): this used to only warn and return successfully when
+    # the cache was missing, producing a submission that LOOKS built but silently lacks the asset
+    # Phase 5.2 explicitly requires -- official scoring would then hit the ~14.5-minute full-catalog
+    # recompute with no indication anything was wrong until it was too late to fix. Treat this as a
+    # hard build failure instead: a submission without the cache is not a valid build.
     if not EMBEDDINGS_CACHE.exists():
-        print(f"WARNING: {EMBEDDINGS_CACHE} not found -- run the evaluator once first "
-              "(it computes and caches this automatically) or the submission will recompute "
-              "all 50K catalog embeddings from scratch on first use.")
-        return
+        raise SystemExit(
+            f"BUILD FAILED: {EMBEDDINGS_CACHE} not found. Run the evaluator once first (it computes "
+            "and caches this automatically) before building the submission -- without it, official "
+            "scoring would hit a ~14.5-minute full-catalog recompute on first use."
+        )
     data_dir = SUBMISSION_DIR / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(EMBEDDINGS_CACHE, data_dir / EMBEDDINGS_CACHE.name)

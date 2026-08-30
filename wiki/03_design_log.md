@@ -612,3 +612,136 @@ substantive work concluded in the same investigation arc) and the standing goal'
   organizer's own network-disabled warning; Phase 1.3's threshold sweep had no validation-split
   discipline; and metadata never contributed to Browsing-turn retrieval fusion. All fixed directly in
   the `implementation/` docs before any implementation code exists.
+
+## 2026-08-30 (cont.) — Recovered 6 "failed" codex reviews from session transcripts; real findings triaged
+
+Throughout Phase 3.5/4/5's work, roughly a dozen `codex exec review` attempts appeared to fail —
+short `.raw.txt` files (13-15 lines: banner, one exec command, then nothing) with no review
+verdict, attributed at the time to an environment/sandbox issue (`CLAUDE.md`'s two-tier protocol
+was followed correctly throughout: every attempt was logged in `status.md` as a blocker rather than
+silently skipped, and every shipped change was instead verified via manual review + empirical
+ablation). While debugging one more "failed" attempt with a custom, minimal-exploration prompt, the
+review still looked incomplete in the redirected file -- but this time the exact session id was
+findable, and reading `~/.codex/sessions/**/*<id>*.jsonl` directly (bypassing the redirect
+entirely) showed the review had genuinely, fully completed, with a real verdict (`"type":
+"ExitedReviewMode"`, a populated `review_output`) that simply never reached the redirected stdout
+file — the final verdict message renders through a different output channel than tool-call output,
+and plain file redirection only reliably captures the latter.
+
+**This meant 6 separate reviews across this session, previously logged as failed, had actually
+completed with real findings sitting unread in session transcripts for hours** (some spanning
+Phase 3.5's Ablation 4 work, some spanning Phase 4/5). Recovered all 6 via `tools/extract_review.py`
+(new) and triaged every finding properly, per the two-tier protocol's own rule that no finding may
+be silently dropped:
+
+1. **[P1] `tune_strategy.py` let `--split validation` evaluate multiple candidates together**
+   (phase3-exit review) — this lets validation results influence which candidate looks best,
+   exactly the "peeking" `10_PRE_REGISTRATION.md`'s train/validation split exists to prevent. This
+   was actually exercised several times this session (the round-3 threshold-extremes check, the
+   metadata-RRF-weight confirmatory check). **Audited each instance**: in every case, the actual
+   *decision* reached was either "no candidate beats the default, keep unchanged" or "decline the
+   change" — never "here's a new champion, ship it based on comparing several validation numbers."
+   No shipped KEEP decision was reached via cherry-picking among validation-evaluated candidates.
+   **Fixed**: the tool now refuses to evaluate more than one candidate against `--split validation`
+   in a single run, making the violation structurally impossible going forward, not just discouraged.
+
+2. **[P1] Anthropic client had no bounded timeout** (llm-booster review) — the SDK's long default
+   timeout/retry policy meant a slow/unreachable/rate-limited endpoint could block an ambiguous
+   turn for minutes before the except-and-fallback ever triggered, defeating the promised graceful
+   degradation in practice. **Fixed**: `timeout=8.0, max_retries=0` on client construction.
+
+3. **[P1] LLM listwise rerank call had no explicit determinism control** (llm-booster review) --
+   omitting an explicit sampling setting risked non-reproducible permutations passing validation
+   without being reproducible. **First fix attempt (`temperature=0`) was itself broken**: the
+   installed `anthropic` SDK (1.2.0) does not accept a `temperature` parameter in this API version
+   at all (confirmed via `inspect.signature`) -- it crashed every single call with `TypeError`,
+   which the existing except-and-fallback silently swallowed, **completely disabling the booster
+   without any visible error**. The "re-verified" ablation run immediately after that first fix
+   produced byte-identical ON/OFF results -- which should have been an immediate red flag (a
+   working booster essentially never produces IDENTICAL output to having it off) but was initially
+   misread as "huh, no effect this time" rather than "this is completely broken." Caught by
+   deliberately investigating why ON and OFF matched exactly. **Actually fixed**: removed the
+   unsupported kwarg; empirically, 3 repeated identical calls with no temperature control returned
+   byte-identical permutations, suggesting this endpoint is already low-variance by default -- an
+   observation, not a guarantee, documented honestly as a real, unresolved limitation of this SDK
+   surface. **Re-ablated with the genuinely working fix**: validation (n=40) ON
+   0.45/0.303681/7.4/**0.388104** vs OFF 0.425/0.266667/7.6/**0.3605**; training (n=160,
+   confirmatory) ON 0.51875/0.321029/6.6625/**0.442434** vs OFF 0.5/0.280952/6.81875/**0.417911** --
+   a genuine, consistent win on both splits, confirming Ablation 4's original conclusion (KEEP
+   ENABLED) survives, once the implementation actually works.
+
+4. **[P2] Weighted RRF fusion didn't skip zero-weight legs** (rrf-weight review) — `weight=0.0`,
+   documented as "drop this leg entirely," still inserted every one of that leg's ids into the
+   fused-score dict with a zero contribution, making the fusion "look" non-empty from spurious
+   zero-score entries and potentially letting arbitrary zero-score candidates fill the pool. Affects
+   only the already-declined `METADATA_RRF_WEIGHT=0.0` exploration (shipped default is `1.0`, never
+   triggers this path) -- **fixed anyway** since the knob remains exposed for future use.
+
+5. **[P2] Slate hedging shipped enabled despite a validation-split wash** (hedging-nudge review) --
+   this is the big one. The validation-split check (n=40) showed HitRate@10 IDENTICAL between ON
+   and OFF (0.45 both) and only a hairline MRR difference (0.270238 vs 0.269792) — not a regression,
+   but not a confirmed win either, genuinely a wash. The shipped decision reasoned "the training
+   split's larger sample (+1.9%) suggests the effect is real, just underpowered on validation" and
+   shipped anyway. **This is precisely the reasoning `10_PRE_REGISTRATION.md`'s own rule exists to
+   rule out** ("a win only on the training split is meaningless by construction" — post-hoc
+   rationalizing a failed held-out check by appealing to the training-split number it's supposed to
+   be checked against is not a loophole, it's the exact failure mode). **Reversed**:
+   `ENABLE_SLATE_HEDGING` set back to `False`. This also reverses the "guaranteed-path score raised
+   to 0.415731" claim reported earlier — see the corrected numbers below. Module kept, disabled, for
+   the "tried, looked promising, held-out check didn't confirm it, correctly declined on review" record.
+
+6. **[P2] `calibration_check.py` conflated "both" actions with forced commits** (hedging-nudge
+   review) — "both" turns still ask a clarifying question and are deliberately not hedged by
+   `agent.py` (hedging gates specifically to `action == "commit"`), so counting them as "forced
+   commits" mislabeled non-forced, non-hedged turns and skewed the diagnostic that motivated
+   building slate hedging in the first place. **Fixed**: now tracks only genuine `"commit"` actions.
+
+7. **[P1] Bundled catalog embedding cache resolved relative to process cwd, not the package**
+   (phase5-packaging review) — `catalog.py`'s cache path was `Path("data/_catalog_embeddings.npz")`,
+   resolved against whatever directory the importing process happens to be running from. If the
+   official harness imports `submission/agent.py` without first `cd`-ing into `submission/` (the
+   overwhelmingly likely case — nothing in `docs/submission_rules.md` suggests the harness would
+   do that), this silently misses the bundled cache entirely and triggers the ~14.5-minute
+   full-catalog recompute the whole bundling effort (D-EMBED-CACHE) exists to prevent. **This
+   directly undermines the "verified end-to-end" claim from Phase 5.2's offline reproducibility
+   test** — that test happened to `cd` into `submission/` before running, which accidentally made
+   the buggy cwd-relative path resolve correctly by coincidence, not because the fix actually
+   worked. A real gap in my own verification methodology, not just the code. **Fixed**: added
+   `model_paths.resolve_data_asset()` (checks cwd-relative first for dev convenience, package-
+   relative second, matching how `model_paths.resolve()` already handles the model weights) and
+   **re-verified properly this time** — ran the isolated offline test again, deliberately staying
+   at the temp directory's root (not `cd`-ing into `submission/`) and importing via
+   `sys.path.insert(0, 'submission')` instead: `Agent` constructed in 13s (a real cache hit) even
+   without the accidental cwd coincidence.
+
+8. **[P1] `build_submission.py` only warned, and built successfully, when the embedding cache was
+   missing** (phase5-packaging review) — a submission built on a fresh checkout (no external
+   evaluator run yet to generate the cache) would ship without the required asset while still
+   printing "submission built," with no signal anything was wrong until official scoring hit the
+   slow path. **Fixed**: missing cache is now a hard `SystemExit`, not a warning.
+
+9. **[P2] Phase 4 lookahead mis-normalized probabilities for partially-populated facets**
+   (phase4-closeout review) — `expected_entropy_reduction()` normalized each value's probability
+   over the POPULATED subset (`len(values)`, since `_facet_values()` silently drops candidates
+   missing the facet) while `base_entropy` covered the full pool, so candidates missing a sparse
+   facet contributed no posterior entropy at all, letting a sparsely-populated facet look
+   artificially maximally informative. Affects only already-disabled code (Phase 4 was declined
+   regardless) -- **fixed anyway**: now weights every branch, including an explicit "missing"
+   branch, against the full pool size.
+
+**Corrected numbers, replacing every "0.415731 guaranteed-path" and "slate hedging shipped" claim
+made earlier this session**: guaranteed-path (no API key) full-200 TechnicalScore is **0.406428**
+(not 0.415731 -- that number depended on slate hedging, now reversed). With the LLM booster
+correctly enabled (key present, now genuinely working): full-200 TechnicalScore **0.429943**. Note
+the guaranteed-path number also shows a small (~0.6pp) drift from the earlier-reported 0.40927,
+traced to the catalog embedding cache being regenerated from scratch during Phase 5.2's `.npz`
+migration -- a fresh dense-encoding pass can differ by tiny floating-point margins from a prior
+one due to ordinary multi-threaded BLAS non-associativity (not the hash-seed bug, which is fully
+fixed and confirmed stable: both figures are exactly reproducible across repeated runs against a
+fixed cache). This is now the accepted, documented, and *stable* guaranteed-path figure going
+forward -- treated as the true value, not chased further given its small magnitude.
+
+**Process fix**: `CLAUDE.md`'s work-phase protocol now documents the redirect-truncation pitfall
+directly (see that file), so no future session repeats this mistake. `tools/extract_review.py` is
+a small, reusable utility for recovering a review's `review_output` from its session transcript
+whenever a `.raw.txt` looks incomplete -- check it before ever concluding a review "found nothing."

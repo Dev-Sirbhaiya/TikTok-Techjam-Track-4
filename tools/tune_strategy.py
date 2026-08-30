@@ -79,6 +79,22 @@ def main() -> None:
     args = parser.parse_args()
 
     candidates = json.loads(Path(args.candidates).read_text(encoding="utf-8"))
+    # CORRECTED per codex review (2026-08-30): this used to let --split validation evaluate and
+    # rank an arbitrary number of candidates together, which lets validation results influence
+    # which candidate looks best -- exactly the "peeking" 10_PRE_REGISTRATION.md's train/validation
+    # split exists to prevent (training proposes changes; validation only accepts/rejects the
+    # single already-decided winner). A multi-candidate validation run was actually exercised
+    # several times this session; see wiki/03_design_log.md's 2026-08-30 audit entry for the
+    # honest accounting of which conclusions were and weren't affected. Now hard-enforced: at
+    # most one candidate may be evaluated per --split validation invocation.
+    if args.split == "validation" and len(candidates) > 1:
+        raise SystemExit(
+            f"Refusing to evaluate {len(candidates)} candidates against the validation split in "
+            "one run -- this lets validation results influence which candidate looks best, "
+            "violating 10_PRE_REGISTRATION.md's train/validation discipline. Validate exactly one "
+            "already-decided candidate at a time (plus, if needed, a separate single baseline run "
+            "to compare against)."
+        )
     results = [run_one(args.split, name, overrides) for name, overrides in candidates.items()]
     results.sort(key=lambda r: r["technical_score"], reverse=True)
 

@@ -7,12 +7,22 @@ from __future__ import annotations
 import json
 import re
 
-ENABLE_LLM_BOOSTER = True  # Ablation 4 (implementation/08_ABLATION_MATRIX.md), 2026-08-30: real
-# Claude Haiku listwise reranker, ablated on both splits. Validation (n=40): ON
-# 0.475/0.306806/7.325/**0.403042** vs OFF 0.45/0.269792/7.5/**0.375938**. Training (n=160,
-# confirmatory): ON 0.51875/0.320578/6.66875/**0.442173** vs OFF 0.5/0.280345/6.825/**0.417604** --
-# a genuine, consistent win on every metric and (on the larger split) every scenario, MRR gaining
-# the most (+14.4%) exactly as expected for a reranking mechanism. KEPT ENABLED.
+ENABLE_LLM_BOOSTER = True  # Ablation 4 (implementation/08_ABLATION_MATRIX.md). Claude Haiku
+# listwise reranker, ablated on both splits.
+#
+# RE-VERIFIED 2026-08-30 after a codex review (recovered from the session transcript -- see
+# wiki/03_design_log.md's "recovered reviews" entry) found the original ablation used a
+# non-deterministic call (no explicit sampling control) and an unbounded timeout. The first fix
+# attempt (temperature=0) turned out to be worse than the problem it fixed: the installed
+# anthropic SDK doesn't accept that parameter at all, so it crashed every single call and silently
+# disabled the booster entirely (the except-and-fallback swallowed the TypeError) -- the earlier
+# "re-verified" numbers under that broken state were spuriously IDENTICAL to OFF. Removed the
+# unsupported kwarg, kept the bounded timeout (8s, 0 retries -- also from the same review, a real
+# fix: the SDK's long default timeout/retry policy could block an ambiguous turn for minutes on a
+# slow/unreachable endpoint). Re-ablated with the actually-working fix: validation (n=40) ON
+# 0.45/0.303681/7.4/**0.388104** vs OFF 0.425/0.266667/7.6/**0.3605**; training (n=160,
+# confirmatory) ON 0.51875/0.321029/6.6625/**0.442434** vs OFF 0.5/0.280952/6.81875/**0.417911** --
+# a genuine, consistent win on every metric on both splits. KEPT ENABLED.
 #
 # CRITICAL CAVEAT, not a formality: NFR-2 / D-LLM-TIER still holds -- the organizer provides no
 # hosted model credentials, so `agent.py` only constructs an `llm_client` when `ANTHROPIC_API_KEY`
@@ -20,9 +30,8 @@ ENABLE_LLM_BOOSTER = True  # Ablation 4 (implementation/08_ABLATION_MATRIX.md), 
 # set grading environment will almost certainly run WITHOUT this key, meaning `llm_client is None`
 # and this entire block never fires regardless of this flag -- the numbers above are real and
 # validated, but they describe an optional, environment-dependent ceiling, not the expected scored
-# submission result. The guaranteed, always-applicable number remains the cross-encoder-only
-# baseline (Phase 2 corrected exit: TechnicalScore 0.40927 on the full 200 sessions). Report both,
-# never just the boosted one, in any writeup or demo claim.
+# submission result. The guaranteed, always-applicable number is the cross-encoder-only baseline
+# (see wiki/08_evaluation_log.md for the current figure). Report both, never just the boosted one.
 
 _LLM_BOOSTER_MODEL = "claude-haiku-4-5-20251001"  # fast/cheap -- this is a reranking nudge, not deep reasoning
 
@@ -106,6 +115,17 @@ def _llm_listwise_rerank(shortlist: list[dict], query: str, llm_client) -> list[
         f"Return ONLY a JSON array of the candidate numbers (1-{len(shortlist)}), reordered from "
         "best match to worst match for the shopper. No other text."
     )
+    # Codex review (2026-08-30) correctly flagged that omitting an explicit temperature leaves
+    # sampling enabled in principle, risking non-reproducible permutations. The fix attempted here
+    # first (temperature=0) does not work: the installed anthropic SDK (1.2.0)'s messages.create()
+    # does not accept a `temperature` parameter at all in this API version (confirmed via
+    # inspect.signature -- it crashed every single call with TypeError, which the except-and-
+    # fallback below silently swallowed, completely disabling the booster without any visible
+    # error). Removed the unsupported kwarg. Empirically, repeated identical calls to this
+    # endpoint returned byte-identical permutations across 3 trials with no temperature control at
+    # all, suggesting this model/endpoint is already low-variance by default -- but this is an
+    # observation, not a guarantee, and the underlying concern (no explicit determinism control
+    # available in this SDK surface) is a real, documented limitation, not fully resolved.
     response = llm_client.messages.create(
         model=_LLM_BOOSTER_MODEL,
         max_tokens=200,

@@ -52,7 +52,12 @@ def main() -> None:
             sid = entry["session_id"]
             if sid not in last_commit_entropy:
                 last_commit_entropy[sid] = None
-            if entry["action"] in ("commit", "both"):
+            # CORRECTED per codex review (2026-08-30): "both" turns still ask a clarifying
+            # question (agent.py gates slate_hedging specifically to action == "commit", not
+            # "both") and are not what this check means by "forced commit" -- counting them here
+            # mislabeled non-forced, non-hedged turns as forced commits and skewed the entropy/hit
+            # buckets this diagnostic exists to measure accurately.
+            if entry["action"] == "commit":
                 last_commit_entropy[sid] = entry["pool_entropy"]
 
     session_ids = list(last_commit_entropy.keys())
