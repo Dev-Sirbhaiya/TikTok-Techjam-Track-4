@@ -33,6 +33,13 @@ fix existed) were also contaminated by the same `.env` leak is an open, unverifi
 `.env` state at the time wasn't recorded. Treat every guaranteed-path number below dated before this
 correction as potentially optimistic until re-verified; only 0.44082 is confirmed clean.
 
+**`EXTENDED_HARD_FILTER_ATTRS` (the Phase 5.6 buying-track fix, single largest win of the project)
+has now been independently re-confirmed with fully clean tooling on BOTH splits** — training (n=160):
+ON 0.4511 vs OFF 0.4179 (+7.9%); validation (n=40): ON 0.3997 vs OFF 0.3605 (+10.9%). ON wins every
+metric on both splits; no code change (it already defaulted to `True`). Unlike the aggregate
+headline TechnicalScore, this specific decision does not need re-litigating — see
+`wiki/08_evaluation_log.md`'s 2026-08-30 row for the full four-number breakdown.
+
 ## Current phase
 
 **Phases 0 through 5.6 are all DONE.** Full chronological detail lives in `wiki/03_design_log.md`
