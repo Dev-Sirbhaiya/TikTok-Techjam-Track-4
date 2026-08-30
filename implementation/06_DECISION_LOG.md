@@ -344,5 +344,24 @@ fast `np.load()` branch, never the slow encode branch.
 and a Phase 5.2 packaging item (the cache file ships with `submission/`, alongside the bundled model
 weights). See `05_BUILD_PLAN.md`.
 
+**Phase 5.2 implementation, real bug self-caught (2026-08-30)**: while actually building the
+submission bundle, found the cache-validity check only compared row COUNT
+(`cached.shape[0] == len(self.ids)`), not the actual product ID sequence. If the organizer's copy of
+the catalog ever has the same 50,000 products in a different row order (identical content, different
+sequence), row *i*'s cached embedding would silently belong to a different product than row *i* of
+`self.ids` — every dense-search result corrupted with no error, no fallback engaging, since the cache
+looks "valid" by count alone. This was a latent bug since Phase 0, only made acutely relevant now
+that the cache is being shipped to run against a copy of the catalog we don't control. **Fixed**:
+switched from `.npy` (raw array) to `.npz` (`np.savez`), storing the exact id sequence alongside the
+embeddings and validating an exact list match before trusting the cache; any mismatch falls through
+to a full recompute (the existing, already-tested graceful-degradation path). Regenerated the cache
+in the new format and verified: (1) a fresh compute-and-save run produces `(50000, 384)` embeddings
+and a valid cache file; (2) a second run against the same catalog hits the fast cache-load path in
+~17s (vs. ~14.5 min to recompute) with ids validated. **Also verified the actual submission bundle
+end-to-end**: copied `submission/` to an isolated temp directory with `HF_HUB_OFFLINE=1` and an
+empty `HF_HOME` (no access to this machine's real HF cache), and confirmed `Agent` constructs and
+responds correctly using only the bundled models and cache — the genuine offline reproducibility
+check `05_BUILD_PLAN.md`'s Phase 5.3 requires, not a check against the dev machine's own cache.
+
 **This does not change any of Phase 0's scored behavior** — it's a deployment/packaging decision
 about *when* a one-time, input-independent computation happens, not what the agent does per turn.

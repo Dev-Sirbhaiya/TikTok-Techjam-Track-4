@@ -387,7 +387,33 @@ declinable one.
 Run the evaluator one final time against all 200 dev sessions with the final shipped configuration;
 this is the headline number set for the written report.
 
+**Done (2026-08-30).** Already established from Phase 3.5's own closeout, both numbers real and
+verified: guaranteed path (no API key — what official grading will actually run) TechnicalScore
+**0.415731**; optional ceiling with `ANTHROPIC_API_KEY` present, 0.438299. Report 0.415731 as the
+headline number; the ceiling is bonus/demo material, never presented as the expected score.
+
 ### 5.2 — Package `submission/` per `docs/submission_rules.md`, including offline model artifacts
+
+**Done (2026-08-30).** `tools/build_submission.py` (new) regenerates `submission/` from scratch:
+copies `src/copilot/` into `submission/src/`, writes `submission/agent.py`/`requirements.txt`
+(deliberately minimal — `numpy`/`sentence-transformers` only, omitting the optional
+`anthropic`/`python-dotenv` dev conveniences so the submission's declared deps match exactly what
+the guaranteed path needs), bundles both models into `submission/models/` via each model's own
+`.save()` (clean, self-contained — not a raw copy of the HF cache's internal blob/symlink
+structure), and bundles the precomputed catalog embedding cache into `submission/data/`.
+`src/copilot/model_paths.py` (new) resolves each model to its bundled path when present, falling
+back to the bare HF model ID for local dev iteration — wired into `catalog.py`/`ranker.py`.
+
+**Self-caught during this work**: the embedding cache's validity check only compared row count, not
+the actual product ID sequence — a latent bug (harmless while the cache only ever ran against the
+exact machine that built it) made acutely relevant now that the cache ships to run against a copy of
+the catalog we don't control. Fixed (switched to `.npz`, storing and validating the id sequence) —
+full detail in `06_DECISION_LOG.md` D-EMBED-CACHE.
+
+**Verified, not assumed**: copied the actual `submission/` output to an isolated temp directory with
+`HF_HUB_OFFLINE=1` and an empty `HF_HOME` (no access to this machine's real HF cache) and confirmed
+`Agent` constructs and responds correctly using only the bundled assets — this is the genuine
+offline reproducibility check 5.3 requires, run early rather than deferred.
 Copy `src/copilot/` into `submission/src/`, write the top-level `submission/agent.py` re-export,
 `requirements.txt`, and confirm the recommended layout matches exactly.
 
@@ -403,8 +429,9 @@ network access is disabled *before* setup even runs, there is no working machine
 into in the first place; testing "offline mode" only after a successful prefetch on the dev machine
 just proves the dev machine's cache works, not that the submitted bundle is self-contained. **Bundling
 is now the required approach, not an alternative:**
-1. **Bundle the model weights in `submission/models/`** (both models together are well under 200MB)
-   and load explicitly from that local path (`SentenceTransformer("submission/models/bge-small")`,
+1. **Bundle the model weights in `submission/models/`** (both models together measured ~217MB when
+   actually built, not "well under 200MB" as originally estimated here — still a manageable
+   submission size) and load explicitly from that local path (`SentenceTransformer("submission/models/bge-small")`,
    not a bare Hugging Face model-ID string) — this is required, not optional.
 2. A local prefetch cache is a **developer convenience during iteration only**, never a substitute for
    the bundled artifact in the actual submission.

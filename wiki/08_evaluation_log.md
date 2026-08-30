@@ -40,6 +40,8 @@ evaluator reports.
 
 | 2026-08-30 | (Phase 4) | **1-step lookahead question selection** (`phase2/lookahead.py`, expected score-entropy reduction per facet), guaranteed path, both splits | validation (n=40): ON 0.45/0.269792/7.9/**0.367938** vs OFF 0.45/0.270238/7.5/**0.376071**; training (n=160, confirmatory): ON 0.51875/0.287636/6.975/**0.426166** vs OFF 0.5125/0.281734/6.7562/**0.425645** | — | — | — | Validation regressed (MTTC 7.9 vs 7.5 — more turns needed); training essentially flat (+0.1%, MTTC still slightly worse). Per Phase 4's own mandatory higher-bar gate ("diminishing returns are likely by construction over an already-good 1-step heuristic"), this doesn't clear it. **DECLINED** — the existing entropy-based heuristic (`overgenerality.py`) was already good enough that a more theoretically-principled lookahead doesn't earn a measurable improvement. Phase 4's 2-step extension and the full counterfactual/synthetic rollout augmentation were not attempted given the 1-step result. |
 
+| 2026-08-30 | (Phase 5.2) | **Offline reproducibility check**: `submission/` bundle copied to an isolated temp directory, `HF_HUB_OFFLINE=1`, empty `HF_HOME` (no access to this machine's real HF cache) | — | — | — | — | `Agent` constructed in 11.5s (catalog embedding cache hit) and produced a correct, well-formed turn-1 response using only bundled models/cache, zero network access. Confirms the submission is genuinely self-contained, not just "works because this machine already has the models cached." |
+
 Add a row every time the local evaluator is run against a meaningfully different variant (not
 every trivial commit). Link back to the relevant `02_design_decisions.md` entry when a metric
 change is the direct result of a decision.

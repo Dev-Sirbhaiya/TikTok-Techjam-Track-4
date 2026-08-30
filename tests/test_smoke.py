@@ -472,6 +472,20 @@ def test_lookahead_prefers_facet_that_actually_splits_score_distribution():
         la.ENABLE_LOOKAHEAD_QUESTION_SELECTION = original
 
 
+def test_model_paths_falls_back_to_hf_id_when_no_bundle_present():
+    from copilot.model_paths import resolve
+    # No bundled models/ directory exists in this dev checkout -- must fall back cleanly.
+    assert resolve("bge-small-en-v1.5", "BAAI/bge-small-en-v1.5") == "BAAI/bge-small-en-v1.5"
+
+
+def test_model_paths_prefers_bundled_dir_when_present(tmp_path, monkeypatch):
+    import copilot.model_paths as mp
+    bundled = tmp_path / "models" / "some-model"
+    bundled.mkdir(parents=True)
+    monkeypatch.setattr(mp, "_BUNDLED_MODELS_DIR", tmp_path / "models")
+    assert mp.resolve("some-model", "org/some-model") == str(bundled)
+
+
 def test_lookahead_falls_back_on_exception():
     import copilot.phase2.lookahead as la
     original = la.ENABLE_LOOKAHEAD_QUESTION_SELECTION

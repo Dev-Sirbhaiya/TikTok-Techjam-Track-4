@@ -33,7 +33,9 @@ def _get_cross_encoder():
     global _cross_encoder_model
     if _cross_encoder_model is None:
         from sentence_transformers import CrossEncoder
-        _cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        from .model_paths import resolve as _resolve_model_path
+        _cross_encoder_model = CrossEncoder(
+            _resolve_model_path("ms-marco-MiniLM-L-6-v2", "cross-encoder/ms-marco-MiniLM-L-6-v2"))
     return _cross_encoder_model
 
 

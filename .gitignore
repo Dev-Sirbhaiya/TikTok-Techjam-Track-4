@@ -26,3 +26,7 @@ Thumbs.db
 
 # Secrets - never commit API keys
 .env
+
+# Generated at packaging time (tools/build_submission.py) -- mirrors src/copilot + bundled models,
+# not hand-edited. Regenerate rather than version; the actual deliverable is a zip of this dir.
+submission/

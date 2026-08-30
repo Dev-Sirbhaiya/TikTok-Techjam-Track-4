@@ -385,8 +385,9 @@ class CatalogIndex:
             self._dense_failed = True
             return False
         try:
-            cache_path = Path("data/_catalog_embeddings.npy")
-            self._embed_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+            cache_path = Path("data/_catalog_embeddings.npz")  # .npz: bundles ids alongside embeddings
+            from .model_paths import resolve as _resolve_model_path
+            self._embed_model = SentenceTransformer(_resolve_model_path("bge-small-en-v1.5", "BAAI/bge-small-en-v1.5"))
             # Self-caught performance bug before shipping this: the first version encoded up to
             # 1000 chars/item (title+features+description+categories+store+details) across all
             # 50K items -- attention cost scales with sequence length, and this took far longer
@@ -395,12 +396,19 @@ class CatalogIndex:
             # searchable-text blob BM25 already covers exhaustively -- cut sequence length by
             # ~5-8x and cap the model's own max_seq_length so long outliers can't dominate cost.
             self._embed_model.max_seq_length = 64
+            # CORRECTED (self-caught while preparing Phase 5's submission bundle): this used to
+            # validate the cache by ROW COUNT alone (`cached.shape[0] == len(self.ids)`). If the
+            # organizer's copy of the catalog ever has the same 50K products in a DIFFERENT row
+            # order (same count, different sequence), row i's cached embedding would silently
+            # belong to a different product than row i of `self.ids` -- every dense-search result
+            # corrupted with no error, no fallback engaging (the cache looks "valid" by count).
+            # Now stores and validates the exact id sequence alongside the embeddings.
             if cache_path.exists():
-                cached = np.load(cache_path)
-                if cached.shape[0] == len(self.ids):
-                    self._embeddings = cached
-                    self._id_to_idx = {pid: i for i, pid in enumerate(self.ids)}
-                    return True
+                with np.load(cache_path, allow_pickle=False) as cached:
+                    if list(cached["ids"]) == self.ids:
+                        self._embeddings = cached["embeddings"]
+                        self._id_to_idx = {pid: i for i, pid in enumerate(self.ids)}
+                        return True
             texts = [self._embedding_text(self.products[pid]) for pid in self.ids]
             emb = self._embed_model.encode(
                 texts, batch_size=256, show_progress_bar=True, normalize_embeddings=True)
@@ -414,7 +422,7 @@ class CatalogIndex:
         self._id_to_idx = {pid: i for i, pid in enumerate(self.ids)}
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
-            np.save(cache_path, self._embeddings)
+            np.savez(cache_path, embeddings=self._embeddings, ids=np.array(self.ids))
         except OSError:
             pass  # best-effort; this run still has working embeddings in memory regardless
         return True

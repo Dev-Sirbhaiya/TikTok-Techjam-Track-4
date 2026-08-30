@@ -53,13 +53,22 @@ across repeated runs of the same config.
 
 ## Next workstream
 
-**Phase 5 — submission packaging** (`implementation/05_BUILD_PLAN.md`'s Phase 5 section): README,
-demo video, Devpost writeup, and the actual `submission/` packaging step (mirrors `src/copilot/`,
-per `implementation/04_SYSTEM_DESIGN.md`'s repository layout). Before writing the submission
-writeup, re-read `implementation/06_DECISION_LOG.md` in full — it now contains a complete, honest
-"tried, measured, kept/cut" record across every phase, which is exactly the Technical Execution
-narrative material the competition rewards. Confirm `implementation/09_SUPERVISOR_QUESTIONS.md`'s
-open items (SQ3-SQ5: team/demo/workshop notes) before finalizing the writeup.
+**Phase 5 — submission packaging, in progress.** 5.1 (final numbers) and 5.2 (package
+`submission/`, bundle offline model + embedding-cache artifacts, verify genuine offline
+reproducibility) are **done** — see `implementation/05_BUILD_PLAN.md`'s Phase 5 section for full
+detail. `tools/build_submission.py` regenerates `submission/` (gitignored, a build artifact) from
+scratch any time; re-run it if `src/copilot/` changes before the actual submission.
+
+**Remaining**: 5.3 (write the README itself — setup/install steps, exact run command, disclosed
+model choice/cost/latency/offline-fallback, limitations & what you'd improve with more time,
+contribution breakdown; the reproducibility CHECK itself is already done, just the document isn't
+written yet), 5.4 (demo video — a multi-turn session walkthrough, no UI required), 5.5 (Devpost
+written submission — cross-reference `implementation/02_TECHNICAL_PRD.md`'s deliverable checklist).
+Before writing the writeup, re-read `implementation/06_DECISION_LOG.md` in full — it now contains a
+complete, honest "tried, measured, kept/cut" record across every phase, exactly the Technical
+Execution narrative material the competition rewards. Confirm
+`implementation/09_SUPERVISOR_QUESTIONS.md`'s open items (SQ3-SQ5: team/demo/workshop notes) before
+finalizing.
 
 ## Blockers
 
