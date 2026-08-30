@@ -887,6 +887,17 @@ not hidden in the writeup — but every one of these changes was independently r
 tested (unit tests where applicable, full evaluator runs, and proper train/validation ablation for
 the scored-behavior changes), which is a substantive bar on its own.
 
+**Update, same day, user updated codex 0.150.1 → 0.151.0**: retried all 6 commits again — **still
+0/6, no change.** `codex --version` confirmed 0.151.0 active. This rules out "known bug fixed in a
+patch release" as the explanation. `codex doctor` separately flagged (before this retry) that
+Microsoft Defender exclusions for codex's helper executables (`codex.exe`,
+`codex-windows-sandbox-setup.exe`, `codex-command-runner.exe`, `codex-code-mode-host.exe`) were
+unverified — the failure signature (real work happens, then a silent death right at the verdict-
+synthesis transition, no error anywhere) is consistent with a security tool killing a helper
+process mid-flight. That remains the most plausible unconfirmed lead; flagged to the user to check/
+add those exclusions, since this session has no permission to modify Defender settings. 17
+consecutive failures today across 6 commits, 2 codex versions, sequential and parallel invocation.
+
 ## 2026-08-30 — Post-fix recall diagnostic: EXTENDED_HARD_FILTER_ATTRS closed most of the recall gap, exposed a ranking gap instead
 
 Re-ran `tools/diagnose_buying_recall.py` (full 200 sessions) after Phase 5.6/5.7 shipped, to see the
@@ -916,3 +927,43 @@ overlaps with what the existing cross-encoder rerank stage already provides via 
 attention, for a high integration cost (new per-token embedding pipeline, materially more memory,
 a new fusion signal to tune). Logged to `wiki/06_future_ideas.md` rather than declined outright,
 since it remains a legitimate idea if the cross-encoder stage's own ceiling is ever reached.
+
+## 2026-08-30 — Codex review finally succeeded: root cause was account usage quota, not Defender/parallelism/version. `2fe00dd` review triaged, 3 findings fixed
+
+The real root cause of every codex review failure today, found only after checking raw stdout
+directly (not just the JSONL transcript): `ERROR: You've hit your usage limit... try again at 8:51
+PM.` The CLI swallows this into a generic "review was interrupted" message inside the transcript,
+which is why checking for `ExitedReviewMode` alone never surfaced it — a real gap in the recovery
+protocol this session had been following. Microsoft Defender exclusions and the codex version
+update were both reasonable leads given the available signals but were not the actual cause; a
+`chatgpt.com` browser tab open elsewhere also turned out to be a red herring (closing it changed
+nothing) — the quota reset is what actually fixed it. **Lesson for the protocol**: when a review
+looks incomplete, check the raw stdout for an explicit `ERROR:` line before investigating anything
+else — it's the cheapest, most direct check and would have found this immediately.
+
+Once working, review of `2fe00dd` (the original 9-fix recovered-reviews commit) surfaced 3 real,
+previously-missed findings — this commit had been accepted as manually-reviewed-only for hours,
+and a working review found genuine issues in it:
+
+1. **[P1, confidence 0.97] `model_paths.resolve_data_asset()` checked cwd-relative before
+   package-relative** — if the official harness's cwd happened to already contain any file at that
+   relative path (stale, unrelated, or incompatible), it would be silently preferred over the
+   verified bundled cache, potentially corrupting retrieval with no error at all. **Fixed**:
+   reversed the order (package-relative, the verified bundled asset, checked first).
+2. **[P2, confidence 0.92] `tune_strategy.py`'s one-candidate-per-validation-run guard only
+   prevented peeking within a single invocation** — nothing stopped validating candidate A, then in
+   a separate invocation validating candidate B, and keeping whichever scored better; the same
+   peeking the guard exists to prevent, just spread across two runs. **Fixed**: validation now
+   requires the candidate to match one already recorded by the most recent `--split training` run
+   (`tools/_last_training_run.json`, gitignored/transient) — training proposes, validation only
+   accepts or rejects that exact candidate, never a fresh choice made after seeing a score.
+3. **[P2, confidence 0.99] `implementation/05_BUILD_PLAN.md` still hardcoded the RETRACTED
+   0.415731/0.438299 figures**, never updated when slate hedging was reversed — since `CLAUDE.md`
+   designates this page authoritative, a contributor following it verbatim could report a stale,
+   wrong number (this has now happened twice: 0.415731 → 0.406428 → 0.471193, and the page never
+   caught up either time). **Fixed**: replaced the hardcoded number with an explicit pointer to
+   `wiki/08_evaluation_log.md`'s most recent row, so this specific staleness bug cannot recur a
+   third time.
+
+All 3 findings fixed, no findings declined. `overall_correctness` was "patch is incorrect" (0.96
+confidence) before these fixes.

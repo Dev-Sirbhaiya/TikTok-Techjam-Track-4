@@ -77,14 +77,15 @@ def retrieve_candidates(
     Returns (candidates, bm25_dense_disagreement) -- Phase 2.3/2.5 (phase2/voi.py) needs the
     disagreement signal, computed here (not recomputed by the caller) since the BM25/dense
     searches already happened -- recomputing them a second time would double retrieval cost."""
-    from .strategy_config import METADATA_RRF_WEIGHT
+    from .strategy_config import BM25_RRF_WEIGHT, DENSE_RRF_WEIGHT, ENABLE_BM25F, METADATA_RRF_WEIGHT
 
-    bm25_ranked = catalog_index.bm25_search(query_text, top_n=150)
+    bm25_ranked = (catalog_index.bm25f_search(query_text, top_n=150) if ENABLE_BM25F
+                   else catalog_index.bm25_search(query_text, top_n=150))
     dense_ranked = catalog_index.dense_search(query_text, top_n=150, query_embedding_hook=query_embedding_hook)
     metadata_ranked = catalog_index.metadata_rank(slots, top_n=150)
     disagreement = retriever_disagreement(bm25_ranked, dense_ranked)
 
-    legs = [(bm25_ranked, 1.0), (dense_ranked, 1.0), (metadata_ranked, METADATA_RRF_WEIGHT)]
+    legs = [(bm25_ranked, BM25_RRF_WEIGHT), (dense_ranked, DENSE_RRF_WEIGHT), (metadata_ranked, METADATA_RRF_WEIGHT)]
     legs = [(r, w) for r, w in legs if r]
     if not legs:
         return [], disagreement

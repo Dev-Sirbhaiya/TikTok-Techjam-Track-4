@@ -30,3 +30,7 @@ Thumbs.db
 # Generated at packaging time (tools/build_submission.py) -- mirrors src/copilot + bundled models,
 # not hand-edited. Regenerate rather than version; the actual deliverable is a zip of this dir.
 submission/
+
+# tools/tune_strategy.py's transient record of the most recent --split training run's candidate
+# set -- NOT the pre-registered train/validation split (that's tools/session_split.json, tracked).
+tools/_last_training_run.json

@@ -72,6 +72,14 @@ NEG_BOOST_WEIGHT = _float("COPILOT_NEG_BOOST_WEIGHT", 0.10)
 # than a single global weight.
 METADATA_RRF_WEIGHT = _float("COPILOT_METADATA_RRF_WEIGHT", 1.0)
 
+# retrieval.reciprocal_rank_fusion: BM25/dense legs' weights relative to each other and to
+# METADATA_RRF_WEIGHT above (both were previously hardcoded at 1.0, never tunable). UNTESTED, added
+# 2026-08-30 per external research's #2-ranked (by effort-to-impact) suggestion -- cheap, no
+# training involved, same overfitting risk any threshold sweep has (existing split discipline
+# covers it).
+BM25_RRF_WEIGHT = _float("COPILOT_BM25_RRF_WEIGHT", 1.0)
+DENSE_RRF_WEIGHT = _float("COPILOT_DENSE_RRF_WEIGHT", 1.0)
+
 # catalog.apply_hard_filters: whether to ALSO hard-restrict on disclosed material/color/style slots,
 # not just category/brand/budget. Added 2026-08-30 after tools/diagnose_buying_recall.py found
 # 37.5% of buying-scenario targets never reach the fused candidate pool at all (vs. 26.2% for
@@ -88,6 +96,31 @@ METADATA_RRF_WEIGHT = _float("COPILOT_METADATA_RRF_WEIGHT", 1.0)
 # diagnostic that found this.
 EXTENDED_HARD_FILTER_ATTRS = _bool("COPILOT_EXTENDED_HARD_FILTER_ATTRS", True)
 
+# agent.reset(): whether to seed MultiInterestState from the evaluator-provided
+# `user_profile.preference_tags` before turn 1, instead of starting from nothing. UNTESTED, off by
+# default pending ablation -- added 2026-08-30 after noticing `user_profile` (a real per-session
+# signal the evaluator hands us at reset(), e.g. preference_tags=["fit","comfort","durability"])
+# had been received and discarded since Phase 0 ("reserved for Phase 1+ personalization," never
+# revisited). This is a per-SESSION prior only -- there is no cross-session user identifier
+# anywhere in the session data, so this cannot and does not persist across sessions.
+ENABLE_PROFILE_SEEDING = _bool("COPILOT_ENABLE_PROFILE_SEEDING", False)
+
+# agent.py's per-candidate rank-time boost from phase2.quality_boost.bayesian_quality_score(),
+# using the catalog's own average_rating/rating_number fields (also unused since Phase 0). UNTESTED,
+# off by default pending ablation -- see phase2/quality_boost.py for the shrinkage rationale.
+ENABLE_QUALITY_BOOST = _bool("COPILOT_ENABLE_QUALITY_BOOST", False)
+QUALITY_BOOST_WEIGHT = _float("COPILOT_QUALITY_BOOST_WEIGHT", 0.05)
+
+# ranker.rerank(): average a second pretrained cross-encoder's (z-scored) score in with the first's,
+# instead of trusting one model. UNTESTED, off by default pending ablation -- see ranker.py's
+# comment for the full rationale and the margin_skip caveat.
+ENABLE_CROSS_ENCODER_ENSEMBLE = _bool("COPILOT_ENABLE_CROSS_ENCODER_ENSEMBLE", False)
+
+# retrieval.retrieve_candidates(): use catalog.bm25f_search() (field-weighted) instead of plain
+# catalog.bm25_search() for the BM25 fusion leg. UNTESTED, off by default pending ablation -- see
+# catalog.bm25f_search()'s docstring for the rationale.
+ENABLE_BM25F = _bool("COPILOT_ENABLE_BM25F", False)
+
 
 def as_dict() -> dict:
     """For logging a run's exact effective config next to its evaluator result."""
@@ -99,4 +132,11 @@ def as_dict() -> dict:
         "NEG_BOOST_WEIGHT": NEG_BOOST_WEIGHT,
         "METADATA_RRF_WEIGHT": METADATA_RRF_WEIGHT,
         "EXTENDED_HARD_FILTER_ATTRS": EXTENDED_HARD_FILTER_ATTRS,
+        "ENABLE_PROFILE_SEEDING": ENABLE_PROFILE_SEEDING,
+        "ENABLE_QUALITY_BOOST": ENABLE_QUALITY_BOOST,
+        "QUALITY_BOOST_WEIGHT": QUALITY_BOOST_WEIGHT,
+        "ENABLE_CROSS_ENCODER_ENSEMBLE": ENABLE_CROSS_ENCODER_ENSEMBLE,
+        "ENABLE_BM25F": ENABLE_BM25F,
+        "BM25_RRF_WEIGHT": BM25_RRF_WEIGHT,
+        "DENSE_RRF_WEIGHT": DENSE_RRF_WEIGHT,
     }

@@ -186,6 +186,13 @@ class CatalogIndex:
         self._by_material: dict[str, set[str]] = defaultdict(set)
         self._by_color: dict[str, set[str]] = defaultdict(set)
         self._by_style: dict[str, set[str]] = defaultdict(set)
+        # Phase 5.10: BM25F (field-weighted BM25), gated behind strategy_config.ENABLE_BM25F, off
+        # by default pending ablation -- see bm25f_search()'s docstring. Built alongside the plain
+        # BM25 index unconditionally (cheap, one-time) so the flag can be flipped without a rebuild.
+        self._inverted_high: dict[str, dict[str, int]] = defaultdict(dict)  # title/brand/category
+        self._inverted_low: dict[str, dict[str, int]] = defaultdict(dict)   # description/features/details
+        self._doc_len_high: dict[str, int] = {}
+        self._doc_len_low: dict[str, int] = {}
         self._build_bm25_and_metadata()
 
         self._embed_model = None
@@ -195,6 +202,11 @@ class CatalogIndex:
 
     # ---------- BM25 (plain, dependency-free — see D-BM25 in wiki/03_design_log.md) ----------
     def _build_bm25_and_metadata(self) -> None:
+        ratings = [p["average_rating"] for p in self.products.values()
+                   if isinstance(p.get("average_rating"), (int, float))]
+        # Phase 5.8: catalog-wide mean, computed once, for phase2/quality_boost.py's Bayesian
+        # shrinkage -- gated behind ENABLE_QUALITY_BOOST, off by default pending ablation.
+        self.global_mean_rating = sum(ratings) / len(ratings) if ratings else 4.0
         for pid, p in self.products.items():
             text = searchable_text(p)
             tokens = tokenize(text)
@@ -202,6 +214,17 @@ class CatalogIndex:
             tf: Counter[str] = Counter(tokens)
             for t, count in tf.items():
                 self._inverted[t][pid] = count
+
+            high_text = " ".join(_flatten(p.get("title")) + _flatten(p.get("store")) + _flatten(p.get("categories")))
+            low_text = " ".join(_flatten(p.get("features")) + _flatten(p.get("description")) + _flatten(p.get("details")))
+            high_tokens = tokenize(high_text)
+            low_tokens = tokenize(low_text)
+            self._doc_len_high[pid] = len(high_tokens)
+            self._doc_len_low[pid] = len(low_tokens)
+            for t, count in Counter(high_tokens).items():
+                self._inverted_high[t][pid] = count
+            for t, count in Counter(low_tokens).items():
+                self._inverted_low[t][pid] = count
             for part in _normalized_category_parts(p.get("categories") or []):
                 if part in self.gazetteer["categories"]:
                     self._by_category[part].add(pid)
@@ -231,6 +254,8 @@ class CatalogIndex:
 
         n_docs = len(self.products)
         self._avg_doc_len = (sum(self._doc_len.values()) / n_docs) if n_docs else 0.0
+        self._avg_doc_len_high = (sum(self._doc_len_high.values()) / n_docs) if n_docs else 0.0
+        self._avg_doc_len_low = (sum(self._doc_len_low.values()) / n_docs) if n_docs else 0.0
         self._n_docs = n_docs
 
     def bm25_search(self, query_text: str, top_n: int = 150) -> list[str]:
@@ -260,6 +285,43 @@ class CatalogIndex:
             for pid, tf in postings.items():
                 denom = tf + k1 * (1 - b + b * self._doc_len[pid] / (self._avg_doc_len or 1))
                 scores[pid] = scores.get(pid, 0.0) + idf * (tf * (k1 + 1)) / (denom or 1)
+        return [pid for pid, _ in sorted(scores.items(), key=lambda kv: -kv[1])[:top_n]]
+
+    def bm25f_search(self, query_text: str, top_n: int = 150,
+                      weight_high: float = 2.0, weight_low: float = 1.0) -> list[str]:
+        """Phase 5.10: field-weighted BM25 (Robertson/Zaragoza BM25F) -- UNTESTED, gated behind
+        strategy_config.ENABLE_BM25F, off by default pending ablation. External research
+        (2026-08-30, prompted by a user question) flagged plain BM25's inability to weight
+        title/brand/category matches above description/bullet-point matches as one of the highest-
+        value, lowest-effort levers commonly used in e-commerce search -- plain bm25_search() above
+        treats every field as equally important because searchable_text() concatenates them all
+        into one flat string before indexing.
+
+        Computes a single weighted pseudo-frequency per term (length-normalized per field group,
+        weighted, then summed) and applies BM25's saturation function ONCE to that combined value --
+        the standard BM25F formulation, not two separate BM25 scores added together (which would
+        double-count idf and over-reward terms present in both field groups)."""
+        import math
+        q_tokens = sorted(set(tokenize(query_text)))
+        if not q_tokens:
+            return []
+        k1, b = 1.5, 0.75
+        scores: dict[str, float] = {}
+        for t in q_tokens:
+            high_postings = self._inverted_high.get(t, {})
+            low_postings = self._inverted_low.get(t, {})
+            pids = set(high_postings) | set(low_postings)
+            if not pids:
+                continue
+            df = len(pids)
+            idf = max(0.0, math.log((self._n_docs - df + 0.5) / (df + 0.5) + 1))
+            for pid in pids:
+                tf_high = high_postings.get(pid, 0)
+                tf_low = low_postings.get(pid, 0)
+                norm_high = tf_high / (1 - b + b * self._doc_len_high.get(pid, 0) / (self._avg_doc_len_high or 1))
+                norm_low = tf_low / (1 - b + b * self._doc_len_low.get(pid, 0) / (self._avg_doc_len_low or 1))
+                pseudo_tf = weight_high * norm_high + weight_low * norm_low
+                scores[pid] = scores.get(pid, 0.0) + idf * (pseudo_tf * (k1 + 1)) / (k1 + pseudo_tf or 1)
         return [pid for pid, _ in sorted(scores.items(), key=lambda kv: -kv[1])[:top_n]]
 
     # ---------- metadata rank (CORRECTED per codex review: a real fusion leg, not Buying-only) ----------

@@ -387,10 +387,17 @@ declinable one.
 Run the evaluator one final time against all 200 dev sessions with the final shipped configuration;
 this is the headline number set for the written report.
 
-**Done (2026-08-30).** Already established from Phase 3.5's own closeout, both numbers real and
-verified: guaranteed path (no API key — what official grading will actually run) TechnicalScore
-**0.415731**; optional ceiling with `ANTHROPIC_API_KEY` present, 0.438299. Report 0.415731 as the
-headline number; the ceiling is bonus/demo material, never presented as the expected score.
+**Done (2026-08-30).** Numbers deliberately NOT hardcoded here — CORRECTED per codex review
+(2026-08-30, second round): this section previously stated a specific figure (0.415731) that was
+later retracted (a shipped decision reversed after a review found its validation result was a
+wash, not a win — see `wiki/03_design_log.md`), and this page was never updated when the correction
+happened, meaning a contributor following this "authoritative" build plan verbatim could report a
+stale, wrong number. **Always read the current guaranteed-path headline figure from
+`wiki/08_evaluation_log.md`'s most recent full-200-session row** (cross-checked against
+`status.md`'s score table) rather than trusting any number written directly on this page — the
+guaranteed path (no API key — what official grading will actually run) is the one to report; the
+optional ceiling with `ANTHROPIC_API_KEY` present is bonus/demo material only, never presented as
+the expected score.
 
 ### 5.2 — Package `submission/` per `docs/submission_rules.md`, including offline model artifacts
 

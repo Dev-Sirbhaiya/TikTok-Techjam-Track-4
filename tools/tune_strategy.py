@@ -22,6 +22,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PARTICIPANT_REPO = REPO_ROOT / "external" / "techjam-conversational-search"
 SESSIONS_PATH = PARTICIPANT_REPO / "data" / "public_set.jsonl"
 SPLIT_PATH = REPO_ROOT / "tools" / "session_split.json"
+# Transient, gitignored -- NOT the pre-registered train/validation split (that's SPLIT_PATH above).
+# Records the most recent --split training run's exact candidate set, so --split validation can
+# verify it's evaluating one of THOSE already-decided candidates, not a fresh one chosen after
+# seeing a prior validation result -- see main()'s CORRECTED comment below.
+LAST_TRAINING_RUN_PATH = REPO_ROOT / "tools" / "_last_training_run.json"
 
 ENV_VAR_BY_KEY = {
     "CLARIFY_BASE_LOW": "COPILOT_CLARIFY_BASE_LOW",
@@ -31,6 +36,13 @@ ENV_VAR_BY_KEY = {
     "NEG_BOOST_WEIGHT": "COPILOT_NEG_BOOST_WEIGHT",
     "METADATA_RRF_WEIGHT": "COPILOT_METADATA_RRF_WEIGHT",
     "EXTENDED_HARD_FILTER_ATTRS": "COPILOT_EXTENDED_HARD_FILTER_ATTRS",
+    "ENABLE_PROFILE_SEEDING": "COPILOT_ENABLE_PROFILE_SEEDING",
+    "ENABLE_QUALITY_BOOST": "COPILOT_ENABLE_QUALITY_BOOST",
+    "QUALITY_BOOST_WEIGHT": "COPILOT_QUALITY_BOOST_WEIGHT",
+    "ENABLE_CROSS_ENCODER_ENSEMBLE": "COPILOT_ENABLE_CROSS_ENCODER_ENSEMBLE",
+    "ENABLE_BM25F": "COPILOT_ENABLE_BM25F",
+    "BM25_RRF_WEIGHT": "COPILOT_BM25_RRF_WEIGHT",
+    "DENSE_RRF_WEIGHT": "COPILOT_DENSE_RRF_WEIGHT",
 }
 
 
@@ -96,8 +108,37 @@ def main() -> None:
             "already-decided candidate at a time (plus, if needed, a separate single baseline run "
             "to compare against)."
         )
+    # CORRECTED per codex review (2026-08-30, second round): the one-candidate-per-run guard above
+    # only prevents peeking WITHIN a single validation invocation -- nothing stopped running
+    # validation on candidate A, then in a SEPARATE invocation running validation on candidate B,
+    # and keeping whichever validation score happened to be better. That's the same peeking the
+    # guard exists to prevent, just spread across two runs instead of one. Now enforced: a
+    # validation run must name a candidate that actually appeared in the most recent training run
+    # (persisted to LAST_TRAINING_RUN_PATH, gitignored/transient) -- the training step proposes,
+    # this step only accepts or rejects the training-selected candidate, never a fresh choice made
+    # after seeing how a prior candidate scored on validation.
+    if args.split == "validation":
+        if not LAST_TRAINING_RUN_PATH.exists():
+            raise SystemExit(
+                "No recorded --split training run found (tools/_last_training_run.json missing). "
+                "Run --split training first so this candidate is on record as training-proposed, "
+                "then validate it -- never validate a candidate that wasn't proposed by a training run."
+            )
+        last_training = json.loads(LAST_TRAINING_RUN_PATH.read_text(encoding="utf-8"))
+        (name, overrides), = candidates.items()
+        if last_training.get("candidates", {}).get(name) != overrides:
+            raise SystemExit(
+                f"Refusing to validate {name!r}: it does not match any candidate from the most "
+                "recent --split training run (tools/_last_training_run.json). Re-run --split "
+                "training with this exact candidate first -- validation may only confirm or reject "
+                "a candidate the training step already proposed, never a fresh choice."
+            )
+
     results = [run_one(args.split, name, overrides) for name, overrides in candidates.items()]
     results.sort(key=lambda r: r["technical_score"], reverse=True)
+
+    if args.split == "training":
+        LAST_TRAINING_RUN_PATH.write_text(json.dumps({"candidates": candidates}, indent=2), encoding="utf-8")
 
     print(f"\n=== Phase 3.1 tuning results ({args.split} split) ===")
     for r in results:

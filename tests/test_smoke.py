@@ -530,3 +530,61 @@ def test_apply_hard_filters_extended_attrs_off_keeps_category_only_behavior():
         assert ids == {"leather_shoe", "cotton_shoe"}  # material is IGNORED when the flag is off
     finally:
         strategy_config.EXTENDED_HARD_FILTER_ATTRS = original
+
+
+def test_bayesian_quality_score_rewards_well_rated_well_reviewed_product():
+    from copilot.phase2.quality_boost import bayesian_quality_score
+    strong = bayesian_quality_score({"average_rating": 4.9, "rating_number": 5000}, global_mean_rating=4.2)
+    weak = bayesian_quality_score({"average_rating": 1.5, "rating_number": 3000}, global_mean_rating=4.2)
+    assert strong > 0
+    assert weak < 0
+    assert strong > weak
+
+
+def test_bayesian_quality_score_shrinks_low_count_ratings_toward_mean():
+    from copilot.phase2.quality_boost import bayesian_quality_score
+    # A single 5-star review shouldn't outscore a well-established 4.5-star bestseller.
+    one_review = bayesian_quality_score({"average_rating": 5.0, "rating_number": 1}, global_mean_rating=4.2)
+    bestseller = bayesian_quality_score({"average_rating": 4.5, "rating_number": 10000}, global_mean_rating=4.2)
+    assert bestseller > one_review
+
+
+def test_bayesian_quality_score_missing_fields_is_neutral():
+    from copilot.phase2.quality_boost import bayesian_quality_score
+    assert bayesian_quality_score({}, global_mean_rating=4.2) == 0.0
+
+
+def test_multi_interest_seed_then_update_blends_not_overrides():
+    import numpy as np
+    from copilot.phase2.multi_interest import MultiInterestState
+    seed = np.array([1.0, 0.0, 0.0])
+    state = MultiInterestState()
+    state.seed(seed)
+    assert len(state.vectors) == 1
+    turn = np.array([0.0, 1.0, 0.0])
+    state.update(turn)
+    # alpha=0.35: the real turn should have moved the vector away from the pure seed direction,
+    # but the seed's influence (0.65 weight on the first blend) should still be visible.
+    assert 0.0 < float(np.dot(state.vectors[0], seed)) < 1.0
+
+
+def test_bm25f_ranks_title_match_above_description_only_match():
+    products = {
+        "title_match": {"title": "Red Leather Jacket", "description": "A stylish outer layer.",
+                         "categories": ["jackets"]},
+        "desc_match": {"title": "Winter Coat", "description": "Made from red leather accents.",
+                        "categories": ["jackets"]},
+    }
+    index = CatalogIndex(products, GAZETTEER)
+    ranked = index.bm25f_search("red leather")
+    assert ranked[0] == "title_match"  # title/category field weighted above description
+
+
+def test_multi_interest_seed_is_noop_if_already_updated():
+    import numpy as np
+    from copilot.phase2.multi_interest import MultiInterestState
+    state = MultiInterestState()
+    real_turn = np.array([0.0, 1.0, 0.0])
+    state.update(real_turn)
+    state.seed(np.array([1.0, 0.0, 0.0]))  # must not clobber real signal already accumulated
+    assert np.allclose(state.vectors[0], real_turn)

@@ -59,6 +59,21 @@ class MultiInterestState:
             self.vectors[best_idx] = v / (np.linalg.norm(v) + 1e-9)
             self.weights[best_idx] += 1.0
 
+    def seed(self, embedding: Optional[np.ndarray]) -> None:
+        """Phase 5.8: initialize from the evaluator-provided `user_profile.preference_tags`
+        embedding, BEFORE any real turn has happened -- gated behind
+        strategy_config.ENABLE_PROFILE_SEEDING, UNTESTED pending ablation. Only meaningful if
+        called before any `update()` (a no-op otherwise, since it would silently discard real
+        session signal already accumulated). The seed acts as a soft prior, not a hard fact: the
+        very next real `update()` call still blends via the normal EMA (alpha=0.35), so one
+        genuine turn already outweighs it 35/65 and it decays further from there -- this can never
+        override what the user actually says, only nudge turn-1 ranking before anything has been
+        said yet."""
+        if embedding is None or self.vectors:
+            return
+        self.vectors = [embedding / (np.linalg.norm(embedding) + 1e-9)]
+        self.weights = [1.0]
+
     def _update_single(self, turn_embedding: np.ndarray, alpha: float) -> None:
         if not self.vectors:
             self.vectors = [turn_embedding / (np.linalg.norm(turn_embedding) + 1e-9)]

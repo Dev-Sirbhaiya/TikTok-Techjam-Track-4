@@ -26,16 +26,22 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[2]  # .../submission (or repo r
 
 def resolve_data_asset(cwd_relative: Path) -> Path:
     """Resolves a bundled data asset (e.g. the catalog embedding cache), checking the
-    process's cwd-relative path FIRST (dev convenience -- the evaluator's own cwd during local
-    iteration) and the package-relative path SECOND (the actual submission scenario, where the
-    official harness's cwd is unknown/uncontrolled -- self-caught via codex review, 2026-08-30:
-    a bare cwd-relative path silently missed the bundled cache whenever the importing process's
-    cwd wasn't the package root, defeating the entire point of bundling it). Returns the
+    package-relative path FIRST (the verified, bundled asset -- trustworthy regardless of the
+    importing process's cwd) and the cwd-relative path SECOND (dev convenience only). Returns the
     cwd-relative path unchanged if NEITHER location has the file yet (first-ever compute, which
-    then saves to the cwd-relative path as before)."""
-    if cwd_relative.exists():
-        return cwd_relative
+    then saves to the cwd-relative path as before).
+
+    CORRECTED per codex review, 2026-08-30 (second round): the original order checked cwd-relative
+    FIRST -- if the official harness's cwd happened to already contain *any* file at that relative
+    path (stale, or from an unrelated prior run), it would be silently preferred over the verified
+    bundled asset, up to and including a same-shaped-but-wrong cache silently corrupting retrieval
+    with no error at all. The bundled, package-relative asset is the one this project actually
+    verified end-to-end (see the offline-reproducibility entries in wiki/08_evaluation_log.md); it
+    should always win when present, not lose to whatever happens to already exist in an unknown
+    harness cwd."""
     package_relative = _PACKAGE_ROOT / cwd_relative
     if package_relative.exists():
         return package_relative
+    if cwd_relative.exists():
+        return cwd_relative
     return cwd_relative

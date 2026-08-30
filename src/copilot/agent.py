@@ -18,6 +18,7 @@ from .overgenerality import score_entropy
 from .phase2.action_policy import record_outcome, utility_multiplier
 from .phase2.lookahead import select_best_question
 from .phase2.query_nudge import nudge_query_embedding
+from .phase2.quality_boost import bayesian_quality_score
 from .phase2.slate_hedging import hedge_slate
 from .phase2.voi import adjusted_clarify_threshold
 from .phrasing import phrase_question, phrase_recommendation
@@ -26,7 +27,10 @@ from .ranker import ensure_cross_encoder_ready, rerank
 from .rejection_memory import apply_rejection, apply_rejection_filter, detect_rejection_signal
 from .retrieval import retrieve_candidates
 from .state import DialogState
-from .strategy_config import CLARIFY_BASE_LOW, NEG_BOOST_WEIGHT
+from .strategy_config import (
+    CLARIFY_BASE_LOW, ENABLE_PROFILE_SEEDING, ENABLE_QUALITY_BOOST, NEG_BOOST_WEIGHT,
+    QUALITY_BOOST_WEIGHT,
+)
 from .turn_policy import decide_turn_action
 
 ATTRIBUTE_ENUM = [
@@ -80,9 +84,20 @@ class Agent:
             return None
 
     def reset(self, session_id: str, user_profile: dict) -> None:
-        self._sessions[session_id] = DialogState()
+        state = DialogState()
+        self._sessions[session_id] = state
         # user_profile (preference_tags, rating_style, etc.) is a safe aggregate the org provides;
-        # not load-bearing for Phase 0 -- reserved for a Phase 1+ personalization refinement.
+        # was left unused since Phase 0 ("reserved for Phase 1+ personalization"). Phase 5.8: a
+        # per-SESSION-only prior (no cross-session user identifier exists anywhere in the session
+        # data -- see wiki/03_design_log.md's 2026-08-30 entry) seeded from preference_tags, gated
+        # behind ENABLE_PROFILE_SEEDING pending ablation.
+        if ENABLE_PROFILE_SEEDING:
+            tags = user_profile.get("preference_tags") if isinstance(user_profile, dict) else None
+            if isinstance(tags, list) and tags:
+                from .phase2.multi_interest import MultiInterestState
+                embedding = self.catalog_index.encode_text(" ".join(str(t) for t in tags))
+                state.multi_interest = MultiInterestState()
+                state.multi_interest.seed(embedding)
 
     def respond(self, session_id: str, user_message: str, turn: int, top_k: int) -> dict:
         state = self._sessions.setdefault(session_id, DialogState())
@@ -142,7 +157,11 @@ class Agent:
             if state.pref_vector_neg is not None and emb is not None:
                 neg_boost = -NEG_BOOST_WEIGHT * float((emb * state.pref_vector_neg).sum())
             pos_boost = state.multi_interest.boost(emb) if state.multi_interest is not None else 0.0
-            c["_score"] += pos_boost + neg_boost - c.get("_rejection_penalty", 0.0) * 0.05
+            quality = 0.0
+            if ENABLE_QUALITY_BOOST:
+                quality = QUALITY_BOOST_WEIGHT * bayesian_quality_score(
+                    c.get("product", {}), self.catalog_index.global_mean_rating)
+            c["_score"] += pos_boost + neg_boost + quality - c.get("_rejection_penalty", 0.0) * 0.05
 
         entropy = score_entropy([c["_score"] for c in candidates[:10]]) if candidates else 0.0
         state.pool_entropy = entropy

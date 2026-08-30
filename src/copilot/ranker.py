@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import re
 
+from .strategy_config import ENABLE_CROSS_ENCODER_ENSEMBLE
+
 ENABLE_LLM_BOOSTER = True  # Ablation 4 (implementation/08_ABLATION_MATRIX.md). Claude Haiku
 # listwise reranker, ablated on both splits.
 #
@@ -36,6 +38,21 @@ ENABLE_LLM_BOOSTER = True  # Ablation 4 (implementation/08_ABLATION_MATRIX.md). 
 _LLM_BOOSTER_MODEL = "claude-haiku-4-5-20251001"  # fast/cheap -- this is a reranking nudge, not deep reasoning
 
 _cross_encoder_model = None
+_cross_encoder_model_2 = None
+
+# Phase 5.9: average two independent pretrained cross-encoders' scores instead of trusting one.
+# UNTESTED, off by default pending ablation (see strategy_config.ENABLE_CROSS_ENCODER_ENSEMBLE) --
+# external research (2026-08-30, prompted by a user question) flagged this as a well-established,
+# no-training variance-reduction technique with a low integration cost (roughly doubles rerank-
+# stage latency for the candidate set, no new fusion signal to tune). Directly relevant given the
+# post-fix diagnostic (tools/diagnose_buying_recall.py) showing buying's remaining gap is now a
+# RANKING problem (candidates reach the pool, don't reach the top-10), not a recall problem -- this
+# targets exactly that stage. NOTE: `margin_skip`'s early-exit threshold was calibrated for the
+# single-model raw score scale; under the ensemble's z-scored/averaged scale it may fire at a
+# different effective confidence level -- an efficiency-only side effect (per this function's own
+# docstring: never affects correctness), not yet separately recalibrated for the ensemble path.
+_CROSS_ENCODER_MODEL_2_NAME = "ms-marco-electra-base"
+_CROSS_ENCODER_MODEL_2_HF_ID = "cross-encoder/ms-marco-electra-base"
 
 
 def _get_cross_encoder():
@@ -46,6 +63,28 @@ def _get_cross_encoder():
         _cross_encoder_model = CrossEncoder(
             _resolve_model_path("ms-marco-MiniLM-L-6-v2", "cross-encoder/ms-marco-MiniLM-L-6-v2"))
     return _cross_encoder_model
+
+
+def _get_cross_encoder_2():
+    global _cross_encoder_model_2
+    if _cross_encoder_model_2 is None:
+        from sentence_transformers import CrossEncoder
+        from .model_paths import resolve as _resolve_model_path
+        _cross_encoder_model_2 = CrossEncoder(
+            _resolve_model_path(_CROSS_ENCODER_MODEL_2_NAME, _CROSS_ENCODER_MODEL_2_HF_ID))
+    return _cross_encoder_model_2
+
+
+def _zscore(values: list[float]) -> list[float]:
+    n = len(values)
+    if n == 0:
+        return []
+    mean = sum(values) / n
+    variance = sum((v - mean) ** 2 for v in values) / n
+    std = variance ** 0.5
+    if std < 1e-9:
+        return [0.0] * n
+    return [(v - mean) / std for v in values]
 
 
 def ensure_cross_encoder_ready() -> None:
@@ -60,6 +99,8 @@ def ensure_cross_encoder_ready() -> None:
     NFR-4/D-LATENCY's "design defensively, don't assume an unpublished timeout won't bite" warns
     about. Agent.__init__ calls this once, same pattern as the dense model."""
     _get_cross_encoder()
+    if ENABLE_CROSS_ENCODER_ENSEMBLE:
+        _get_cross_encoder_2()
 
 
 def _state_to_query_text(state, query_terms: list[str]) -> str:
@@ -95,7 +136,16 @@ def rerank(shortlist: list[dict], state, query_terms: list[str], margin_skip: fl
         model = _get_cross_encoder()
         query = _state_to_query_text(state, query_terms)
         pairs = [(query, _candidate_text(c)) for c in shortlist]
-        scores = model.predict(pairs)
+        scores = list(model.predict(pairs))
+        if ENABLE_CROSS_ENCODER_ENSEMBLE:
+            # z-score both models within this shortlist before averaging -- two different
+            # pretrained cross-encoders' raw regression heads are not guaranteed to share a scale,
+            # so a plain average would let whichever model happens to output larger-magnitude
+            # numbers silently dominate.
+            model_2 = _get_cross_encoder_2()
+            scores_2 = list(model_2.predict(pairs))
+            z1, z2 = _zscore(scores), _zscore(scores_2)
+            scores = [(a + b) / 2.0 for a, b in zip(z1, z2)]
     except Exception:
         # Cross-encoder unavailable (e.g. model not downloaded) -- degrade to fused-score order
         # rather than failing the turn. NFR-2: never a hard dependency.
