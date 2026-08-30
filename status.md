@@ -119,14 +119,28 @@ stable once a given cache file is fixed, not a control-flow bug.
 
 ## Next workstream
 
-**Phase 5 — submission packaging. 5.1, 5.2, 5.3, and 5.6 are done.** `submission/` has been
-rebuilt (gitignored, a build artifact) with commit `4d8e52e`'s buying-track fix included —
+**Phase 5 — submission packaging. 5.1, 5.2, 5.3, 5.6, and 5.7 are done.** `submission/` has been
+rebuilt (gitignored, a build artifact) with the buying-track fix included —
 **re-run `tools/build_submission.py` before actually submitting** if `src/copilot/` or
-`docs/SUBMISSION_README.md` change again. Codex review of `4d8e52e` was attempted twice, both
-genuinely incomplete (no verdict in either transcript) — accepted as manually-reviewed-only,
-same basis as `2fe00dd`/`77829e1` earlier today (4 incomplete reviews total today, across three
-differently-sized commits — a real environment reliability issue, not a diff-size or one-off
-problem).
+`docs/SUBMISSION_README.md` change again. **Codex review is conclusively unavailable this session**:
+11 consecutive attempts failed today across 6 distinct commits (`2fe00dd`, `77829e1`, `d6ce4ac`,
+`4d8e52e`, `8668665`, `abcf9bb`), in both sequential and parallel invocation, spanning diff sizes
+1-20 files — ruling out diff size and parallelism as the cause. All 6 commits accepted as
+manually-reviewed-only. Don't attempt codex review again this session unless the environment
+changes.
+
+**Phase 5.6's fix also improved intent_override as a side effect** (never-in-pool 20%→10%, since
+those sessions share buying's turn-1 disclosure before the pivot). Post-fix diagnostic shows
+buying's remaining gap shifted from mostly-recall to mostly-ranking (in-pool-but-not-top10 rose
+23.8%→30.0% even as never-in-pool nearly halved) — see `wiki/08_evaluation_log.md`.
+
+**A large batch of research-backed next ideas is logged in `wiki/06_future_ideas.md`, awaiting a
+decision, not yet implemented**: using the evaluator's own unused `user_profile` field (free,
+per-session signal ignored since Phase 0), BM25F field weighting, RRF per-source weight tuning,
+cross-encoder ensembling (directly relevant given the ranking-not-recall finding above), offline
+doc2query-T5 document expansion, and (lower priority / deferred) SPLADE and ColBERT-style
+late-interaction retrieval. None of these are scored-behavior changes yet — all require proper
+train/validation ablation before shipping, per this project's standing discipline.
 
 **5.4 and 5.5 now have working drafts, not just a plan**:
 - `docs/DEMO_VIDEO_SCRIPT.md` — a full recordable script (terminal-recording format, ~4-6 min),

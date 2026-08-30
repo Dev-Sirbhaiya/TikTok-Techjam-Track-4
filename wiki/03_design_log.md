@@ -865,3 +865,54 @@ as manually-reviewed-only, same basis as `2fe00dd` and `77829e1` earlier today. 
 was independently reasoned through (root-caused via direct measurement, not guessed), tested with
 two new unit tests, and ablated on both data splits before being written — the review would have
 been a second automated pass on top of substantial existing rigor, not the only check.
+
+## 2026-08-30 — Codex review conclusively unavailable this session: 11/11 failed, sequential and parallel, across 6 commits
+
+Per a direct user request, launched codex review for every commit since the last successful one,
+**all 6 simultaneously in parallel** rather than one at a time: `2fe00dd`, `77829e1`, `d6ce4ac`,
+`4d8e52e`, `8668665`, `abcf9bb` (diff sizes ranging from 1 file to 20). Checked each one's actual
+session transcript for `ExitedReviewMode` (not just raw.txt length, per the established protocol) —
+**all 6 failed to produce a verdict.** Combined with the 5 earlier sequential failures today (2 on
+`2fe00dd`, 1 on `77829e1`, 2 on `4d8e52e`), that's **11 consecutive failures across 6 distinct
+commits, in both sequential and parallel invocation, spanning diff sizes from 1 to 20 files** — this
+rules out diff size, parallelism, and any single commit's content as the cause. `codex exec
+review`'s review-synthesis step is genuinely, conclusively broken in this session's environment
+right now, not an occasional flake.
+
+**Decision**: stop attempting codex review for the remainder of this session unless something about
+the environment changes (e.g. a fresh session, a codex update). All 6 of today's commits
+(`2fe00dd`, `77829e1`, `d6ce4ac`, `4d8e52e`, `8668665`, `abcf9bb`) are accepted as
+manually-reviewed-only. This is a real, disclosed gap in review coverage for this stretch of work —
+not hidden in the writeup — but every one of these changes was independently reasoned through,
+tested (unit tests where applicable, full evaluator runs, and proper train/validation ablation for
+the scored-behavior changes), which is a substantive bar on its own.
+
+## 2026-08-30 — Post-fix recall diagnostic: EXTENDED_HARD_FILTER_ATTRS closed most of the recall gap, exposed a ranking gap instead
+
+Re-ran `tools/diagnose_buying_recall.py` (full 200 sessions) after Phase 5.6/5.7 shipped, to see the
+diagnostic's own before/after picture, not just the aggregate TechnicalScore:
+
+| Scenario | never-in-pool (before → after) | in-pool-not-top10 (before → after) | hit@10 (before → after) |
+|---|---|---|---|
+| buying | 37.5% → **22.5%** | 23.8% → 30.0% | 38.8% → **47.5%** |
+| intent_override | 20.0% → 10.0% | 40.0% → 46.7% | 40.0% → 43.3% |
+| browsing | 26.2% → 23.8% | 8.8% → 10.0% | 65.0% → 66.2% |
+| boundary | 30.0% → 30.0% | 10.0% → 10.0% | 60.0% → 60.0% |
+
+The fix worked exactly as diagnosed: retrieval recall improved substantially for buying (never-in-
+pool nearly halved) and, as an unplanned side benefit, for intent_override too (its sessions share
+the same buying-style turn-1 disclosure before the pivot). But it also cleanly surfaces the *next*
+bottleneck: a meaningfully larger share of buying's candidates now reach the pool but still don't
+make the final top-10 (23.8% → 30.0%) — this is now a **ranking** problem, not a recall problem, and
+points more directly at reranking-side improvements (e.g. cross-encoder ensembling) than further
+retrieval-side work, for whichever gets tackled next.
+
+## 2026-08-30 — Deferred idea logged: ColBERT-style late-interaction retrieval
+
+Parallel research (prompted by a user question) confirmed a pretrained, no-training-required
+ColBERT checkpoint exists (`colbert-ir/colbertv2.0`) and would be rules-compliant. Deliberately not
+promoted to the active plan: its main advantage (fine-grained token-level matching) substantially
+overlaps with what the existing cross-encoder rerank stage already provides via full cross-
+attention, for a high integration cost (new per-token embedding pipeline, materially more memory,
+a new fusion signal to tune). Logged to `wiki/06_future_ideas.md` rather than declined outright,
+since it remains a legitimate idea if the cross-encoder stage's own ceiling is ever reached.
