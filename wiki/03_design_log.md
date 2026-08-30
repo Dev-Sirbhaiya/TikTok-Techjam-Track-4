@@ -988,3 +988,51 @@ confidence) before these fixes.
 
 `d6ce4ac` (the cwd-bug fix itself) reviewed clean: "patch is correct," zero findings, 0.96
 confidence — a genuine, direct confirmation the earlier self-caught fix was solid.
+
+**`8668665` (Phase 5.6 closeout docs) triaged, 3 findings, all fixed.** The P1 finding was the
+most serious one found all day: `tools/diagnose_buying_recall.py` reads hidden targets from ALL
+200 sessions, and its output was what PROPOSED `EXTENDED_HARD_FILTER_ATTRS` in the first place —
+meaning the 40-session validation holdout's hidden targets informed the proposal, contaminating
+the later "+14.8% validation confirms it" claim. Exactly the peeking `10_PRE_REGISTRATION.md`
+exists to prevent, just via a diagnostic tool instead of a direct evaluator sweep on the fix itself.
+
+**Remediation**: added `--split` to `diagnose_buying_recall.py` (mirroring `tune_strategy.py`'s
+convention) and re-ran the SAME comparison using ONLY the 160 training-split sessions' hidden
+targets (n=64 buying-scenario sessions within training):
+
+| | never-in-pool | in-pool-not-top10 | hit@10 |
+|---|---|---|---|
+| Before (`EXTENDED_HARD_FILTER_ATTRS=False`) | 37.5% | 20.3% | 42.2% |
+| After (`=True`, current default) | 28.1% | 26.6% | 45.3% |
+
+**The same pattern replicates using training-only evidence** — never-in-pool drops by a similar
+proportion to the original full-200 measurement (37.5%→22.5%), just noisier at this smaller n.
+This retroactively confirms the fix proposal was legitimately motivated by training-split-only
+evidence, even though the diagnostic that originally surfaced it happened to touch all 200
+sessions. The existing 40-session validation ablation (+14.8% TechnicalScore) can be treated as a
+genuinely clean holdout confirmation going forward — the decision itself was sound; only the
+process that arrived at it needed tightening, which is now done for future diagnostics.
+
+Fixed the docstring's original false claim ("safe to run against the full 200-session set, no
+train/validation concern") and updated the two P2 findings: `wiki/04_agent_progress.md`'s stale
+Phase 5.6 row (said "not yet rebuilt," was actually already rebuilt) and the incomplete-review
+count arithmetic error (said 4, should have said 5 at that point) — though the latter is now moot
+since codex review is fully working and all 6 commits have real verdicts.
+
+**`abcf9bb` (cross-encoder warmup) triaged, 1 finding, fixed** — see the separate entry below on
+the graceful-degradation regression this caught.
+
+## 2026-08-30 — Mid-flight code edit invalidated one ablation run; killed and restarted clean
+
+While reviewing `4d8e52e`, fixed two real bugs directly in `catalog.py` (the material-index and
+disclosed-value-normalization bugs above) WHILE a training-split ablation of the Phase 5.8/5.9
+mechanisms (profile seeding, quality boost, cross-encoder ensembling) was still running in the
+background. Since `tune_strategy.py` launches a fresh subprocess per candidate, the candidates that
+had already run before the edit used the old buggy `catalog.py`; any that ran after would have used
+the fixed version — making the 4 candidates in that one run non-comparable to each other, since
+`EXTENDED_HARD_FILTER_ATTRS` (on for all 4) would behave differently depending on which catalog.py
+version each candidate's subprocess happened to load. **Killed the run and restarted it cleanly**
+once no further code edits were pending, rather than risk reporting a result computed under
+inconsistent conditions. **Process lesson**: don't edit any module a running ablation imports until
+that ablation finishes — obvious in hindsight, easy to miss when several review-driven fixes and a
+long-running background ablation overlap in the same session.
