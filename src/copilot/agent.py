@@ -22,7 +22,7 @@ from .phase2.slate_hedging import hedge_slate
 from .phase2.voi import adjusted_clarify_threshold
 from .phrasing import phrase_question, phrase_recommendation
 from .preference import update_preference_vectors
-from .ranker import rerank
+from .ranker import ensure_cross_encoder_ready, rerank
 from .rejection_memory import apply_rejection, apply_rejection_filter, detect_rejection_signal
 from .retrieval import retrieve_candidates
 from .state import DialogState
@@ -49,6 +49,11 @@ class Agent:
         self.gazetteer = gazetteer
         self._sessions: dict[str, DialogState] = {}
         self.llm_client = self._build_llm_client()
+        # Self-caught latency finding (2026-08-30): without this, the cross-encoder loaded lazily on
+        # the first rerank() call -- a real ~24s one-time cost landing inside session 1's turn 1
+        # response instead of here, where an unscored one-time cost belongs. See
+        # ranker.ensure_cross_encoder_ready's docstring for the full story.
+        ensure_cross_encoder_ready()
 
     @staticmethod
     def _build_llm_client():

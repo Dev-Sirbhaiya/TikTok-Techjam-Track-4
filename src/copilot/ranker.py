@@ -48,6 +48,20 @@ def _get_cross_encoder():
     return _cross_encoder_model
 
 
+def ensure_cross_encoder_ready() -> None:
+    """Self-caught latency finding (2026-08-30): unlike the dense model (loaded during
+    CatalogIndex.__init__ via _ensure_dense_ready, matching the class docstring's stated intent
+    that expensive setup happens once at construction, not per-turn), the cross-encoder was loading
+    lazily on the FIRST rerank() call -- a real, previously-unmeasured ~24s one-time cost landing
+    inside session 1's turn 1 response time instead of construction time. Since the evaluator
+    constructs one Agent and reuses it across all sessions (never per-session), this wasn't a
+    per-session risk, but it still needlessly put a large, avoidable cost inside a SCORED turn's
+    response window rather than the unscored construction window -- exactly the failure mode
+    NFR-4/D-LATENCY's "design defensively, don't assume an unpublished timeout won't bite" warns
+    about. Agent.__init__ calls this once, same pattern as the dense model."""
+    _get_cross_encoder()
+
+
 def _state_to_query_text(state, query_terms: list[str]) -> str:
     parts = list(dict.fromkeys(query_terms))  # de-dup, preserve order
     for key in ("category", "material", "color", "size", "style", "use_case", "budget"):
